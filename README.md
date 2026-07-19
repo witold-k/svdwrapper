@@ -10,21 +10,18 @@ Mathematical formulation: A = U * Sigma * Vt
 
 The core philosophy of svdwrapper is to separate the high-level matrix API from the underlying hardware-specific execution pipelines. It guarantees API Symmetry: whether you compute an SVD on an industrial server CPU or stream it to a data center GPU, the function signatures and matrix output shapes remain identical.
 
+```text
 +-----------------------------------------------------------------+
-
 |                           Client Code                           |
 +-----------------------------------------------------------------+
                                  |
         +------------------------+------------------------+
-
         |                                                 |
         v                                                 v
 SvdManager<f32>::compute_svd                      SvdManager<f64>::compute_svd
-
         |                                                 |
         v                                                 v
  [Pattern Matching]                                [Pattern Matching]
-
         |                                                 |
         +-------+                                 +-------+-------+
 
@@ -33,6 +30,7 @@ SvdManager<f32>::compute_svd                      SvdManager<f64>::compute_svd
      [cuda]   [cpu]                            [cpu]   [cuda]  [opencl]
    CudaF32Svd CpuSvd                          CpuSvd CudaF64Svd OpenClSvd
   (cuSOLVER) (LAPACK)                        (LAPACK) (gesvdj) (Kernels)
+```
 
 Key Structural Highlights:
 
@@ -52,36 +50,44 @@ Building this crate requires specific system dependencies depending on your acti
 
 To compile the underlying bindgen-generated MAGMA or cuSOLVER C bindings, you must install the LLVM/Clang developer tooling and MAGMA development libraries:
 
+```bash
 sudo apt update
 sudo apt install -y llvm-dev libclang-dev clang
 sudo apt install -y libmagma-dev libmagma2
 sudo apt install -y libopenblas-dev gfortran pkg-config
+```
 
 ### 2. Environment Configuration
 
-For CUDA-accelerated paths, the build system must be able to discover your local CUDA Toolkit installation. Ensure the following rules are set up:
+For CUDA-accelerated paths, the build system must be able to discover your local CUDA Toolkit installation.
+Ensure the following rules are set up:
 
 * CUDA_HOME environment variable must be exported and point to your CUDA directory.
 * The Nvidia CUDA Compiler (nvcc) must be globally available inside your PATH.
 
+```bash
 Example setup (.bashrc / .zshrc):
 export CUDA_HOME=/usr/local/cuda
 export PATH=$CUDA_HOME/bin:$PATH
-
+```
 ---
 
 ## Cargo Features
 
 Tailor the crate's footprint to your target deployment infrastructure by enabling or disabling specific backends in your Cargo.toml:
 
+```toml
 [dependencies]
 svdwrapper = { version = "0.1.0", features = ["cpu", "cuda"] }
+```
 
+```text
 Feature Flag | Target Architecture   | Underlying Engine               | Precision
 -------------+-----------------------+---------------------------------+-----------
 "cpu"        | Standard x86_64 / ARM | System LAPACK (OpenBLAS/MKL)    | f64
 "cuda"       | Nvidia GPUs           | CUDA Driver API & cuSOLVER      | f32 & f64
 "opencl"     | Agnostic Accelerators | Custom OpenCL Compute Kernels   | f64
+```
 
 ---
 
@@ -148,16 +154,24 @@ fn main() -> anyhow::Result<()> {
 
 ## Local Verification and Testing
 
-The crate includes separate integration tests that validate the mathematical correctness of both rectangular and square transformations down to strict machine epsilon boundaries (diff <= 1e-12 for double-precision).
+The crate includes separate integration tests that validate the mathematical correctness of both
+rectangular and square transformations down to strict machine epsilon boundaries (diff <= 1e-12 for double-precision).
 
 Running Core CPU Tests:
+```bash
 cargo test --features cpu
+```
 
 Running Nvidia GPU Tests:
 Ensure you have the Nvidia CUDA Toolkit and structural GPU drivers configured locally on your development machine before launching:
+```bash
 cargo test --features cuda
+```
 
 Running High-Volume Matrix Benchmarks:
-To evaluate hardware execution scaling against massive arrays (10000 x 10000) without logging flooding data to the standard output, trigger the performance benchmarks under the --release flag:
+To evaluate hardware execution scaling against massive arrays (10000 x 10000)
+without logging flooding data to the standard output, trigger the performance benchmarks under the --release flag:
+```bash
 cargo test --release -- --ignored --nocapture
+```
 
