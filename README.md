@@ -24,7 +24,6 @@ SvdManager<f32>::compute_svd                      SvdManager<f64>::compute_svd
  [Pattern Matching]                                [Pattern Matching]
         |                                                 |
         +-------+                                 +-------+-------+
-
         |       |                                 |       |       |
         v       v                                 v       v       v
      [cuda]   [cpu]                            [cpu]   [cuda]  [opencl]
@@ -34,21 +33,32 @@ SvdManager<f32>::compute_svd                      SvdManager<f64>::compute_svd
 
 Key Structural Highlights:
 
-* Memory-Layout Bridge: ndarray natively stores data in a row-major (C-style) format, whereas vendor-provided high-performance libraries (LAPACK, cuSOLVER, Jacobi solvers) strictly require column-major (Fortran-style) configurations. svdwrapper handles this pivot layer safely under the hood, guaranteeing mathematically exact transformations while also handling non-contiguous matrix slices.
+* Memory-Layout Bridge: ndarray natively stores data in a row-major (C-style) format,
+    whereas vendor-provided high-performance libraries (LAPACK, cuSOLVER, Jacobi solvers)
+    strictly require column-major (Fortran-style) configurations.
+    svdwrapper handles this pivot layer safely under the hood,
+    guaranteeing mathematically exact transformations while also handling non-contiguous matrix slices.
 
-* Unified Output Layout: Standard LAPACK/cuSOLVER routines return singular values as a reduced 1D vector to minimize bandwidth. svdwrapper automatically projects these elements back into a fully populated 2D diagonal matrix (Sigma) of dimension M x N, eliminating asymmetric downstream multiplication constraints.
+* Unified Output Layout: Standard LAPACK/cuSOLVER routines return singular values
+    as a reduced 1D vector to minimize bandwidth.
+    svdwrapper automatically projects these elements back into a fully populated 2D diagonal
+    matrix (Sigma) of dimension M x N, eliminating asymmetric downstream multiplication constraints.
 
-* RAII Resource Management: Hardware handles, primary driver contexts (CUcontext), and solver channels (cusolverDnHandle_t) are strictly tied to Rust's type system. All active device layers are cleanly de-allocated via Drop semantics upon scope exit, neutralizing GPU memory leaks.
+* RAII Resource Management: Hardware handles, primary driver contexts (CUcontext),
+    and solver channels (cusolverDnHandle_t) are strictly tied to Rust's type system.
+    All active device layers are cleanly de-allocated via Drop semantics upon scope exit, neutralizing GPU memory leaks.
 
 ---
 
 ## Prerequisites and Installation
 
-Building this crate requires specific system dependencies depending on your active features. Ensure your host system satisfies the following setup before building.
+Building this crate requires specific system dependencies depending on your active features.
+Ensure your host system satisfies the following setup before building.
 
 ### 1. System Packages (Ubuntu/Debian)
 
-To compile the underlying bindgen-generated MAGMA or cuSOLVER C bindings, you must install the LLVM/Clang developer tooling and MAGMA development libraries:
+To compile the underlying bindgen-generated MAGMA or cuSOLVER C bindings,
+you must install the LLVM/Clang developer tooling and MAGMA development libraries:
 
 ```bash
 sudo apt update
