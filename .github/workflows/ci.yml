@@ -1,0 +1,93 @@
+# .github/workflows/ci.yml
+name: Rust CI
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main, master, develop ]
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: "1"
+
+jobs:
+  # 1. Build and Test Job
+  build-and-test:
+    name: Build & Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Install System Dependencies (LAPACK / BLAS)
+        # Erforderlich, damit das ndarray-linalg / CPU-Backend auf Ubuntu kompiliert und linkt
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libopenblas-dev gfortran
+
+      - name: Set up Rust toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+          components: clippy, llvm-tools-preview
+
+      - name: Compile CPU Backend
+        # Baut das Projekt explizit mit dem CPU-Feature
+        run: cargo build --verbose --features cpu
+
+      - name: Run CPU Test Suite
+        # Führt die CPU-Integrationstests aus
+        run: cargo test --verbose --features cpu
+
+      - name: Verify CUDA Code Syntax
+        # Da der Runner keine Nvidia-GPU hat, prüfen wir hier zumindest,
+        # ob der CUDA-Code fehlerfrei kompiliert (ohne die Tests auszuführen).
+        run: cargo check --verbose --features cuda
+
+      - name: Run code linter
+        # Prüft den gesamten Code (für alle Features) auf Stil und Warnungen
+        run: cargo clippy --all-features -- -D warnings
+
+  # 2. Separate Coverage Job
+  coverage:
+    name: Test Coverage
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Install System Dependencies (LAPACK / BLAS)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libopenblas-dev gfortran
+
+      - name: Set up Rust toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+          components: llvm-tools-preview
+
+      - name: Install grcov
+        run: cargo install grcov
+
+      - name: Generate profile data
+        env:
+          CARGO_INCREMENTAL: "0"
+          RUSTFLAGS: "-Cinstrument-coverage"
+          LLVM_PROFILE_FILE: "target/coverage/cargo-test-%p-%m.profraw"
+        # Abdeckung wird basierend auf dem testbaren CPU-Backend generiert
+        run: cargo test --features cpu
+
+      - name: Process report with grcov
+        run: |
+          mkdir -p target/coverage/html
+          grcov . --binary-path ./target/debug/deps/ -s . -t html --branch --ignore-not-existing --ignore '../*' --ignore "/*" -o target/coverage/html
+
+      - name: Upload coverage report artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-report
+          path: target/coverage/html/
+          retention-days: 1
+

@@ -1,0 +1,82 @@
+# .gitlab-ci.yml
+image: rust:1.81-slim
+
+variables:
+  CARGO_HOME: $CI_PROJECT_DIR/.cargo
+  RUST_BACKTRACE: "1"
+  CARGO_TERM_COLOR: always
+
+stages:
+  - build
+  - test
+  - lint
+  - coverage
+
+cache:
+  key:
+    files:
+      - Cargo.lock
+  paths:
+    - .cargo/registry/index/
+    - .cargo/registry/cache/
+    - .cargo/git/db/
+    - target/
+
+# Vorbereitungs-Skript für Jobs, die das CPU-Backend kompilieren/linken
+.setup_cpu_deps: &setup_cpu_deps
+  before_script:
+    - apt-get update && apt-get install -y libopenblas-dev gfortran pkg-config
+
+# 1. Compilation Stage
+build_job:
+  stage: build
+  <<: *setup_cpu_deps
+  script:
+    # Baut das CPU-Backend und prüft die CUDA-Syntax auf Korrektheit
+    - cargo build --verbose --features cpu
+    - cargo check --verbose --features cuda
+
+# 2. Test Stage
+test_job:
+  stage: test
+  <<: *setup_cpu_deps
+  script:
+    # Führt gezielt die CPU-Integrationstests aus
+    - cargo test --verbose --features cpu
+
+# 3. Static Analysis Stage
+clippy_job:
+  stage: lint
+  before_script:
+    # Füge pkg-config/BLAS hinzu, da Clippy den Code für die Analyse teils expandieren muss
+    - apt-get update && apt-get install -y libopenblas-dev gfortran pkg-config
+    - rustup component add clippy
+  script:
+    # Prüft das gesamte Projekt inklusive aller Feature-Pfade
+    - cargo clippy --all-features -- -D warnings
+
+# 4. Coverage Report Stage
+coverage_job:
+  stage: coverage
+  dependencies: [] 
+  variables:
+    CARGO_INCREMENTAL: "0"
+    RUSTFLAGS: "-Cinstrument-coverage"
+    LLVM_PROFILE_FILE: "target/coverage/cargo-test-%p-%m.profraw"
+  before_script:
+    # Erweitert um gfortran und libopenblas-dev für ndarray-linalg
+    - apt-get update && apt-get install -y cmake build-essential gcc libopenblas-dev gfortran pkg-config
+    - rustup component add llvm-tools-preview
+    - cargo install grcov
+  script:
+    # Generiert Coverage-Daten basierend auf dem testbaren CPU-Pfad
+    - cargo test --features cpu
+    - mkdir -p target/coverage/html
+    - grcov . --binary-path ./target/debug/deps/ -s . -t html --branch --ignore-not-existing --ignore '../*' --ignore "/*" -o target/coverage/html
+  artifacts:
+    name: "coverage-report-${CI_COMMIT_REF_SLUG}"
+    expose_as: 'Code Coverage Report'
+    paths:
+      - target/coverage/html/
+    expire_in: 1 week
+

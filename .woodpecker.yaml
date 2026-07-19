@@ -1,0 +1,76 @@
+# .woodpecker.yaml
+# Codeberg CI/CD Pipeline (Woodpecker CI) for Rust
+
+kind: pipeline
+name: rust-ci
+
+when:
+  - event: [push, pull_request]
+    branch: [main, master, develop]
+
+variables:
+  - &rust_image "rust:1.81"
+
+steps:
+  # 1. Fetch dependencies and compile the workspace
+  - name: build
+    image: *rust_image
+    commands:
+      # System-Abhängigkeiten für das CPU-Backend installieren
+      - apt-get update && apt-get install -y libopenblas-dev gfortran pkg-config
+      # CPU-Backend bauen und CUDA-Code syntaktisch validieren
+      - cargo build --verbose --features cpu
+      - cargo check --verbose --features cuda
+
+  # 2. Run unit and integration tests with full backtrace enabled
+  - name: test
+    image: *rust_image
+    environment:
+      RUST_BACKTRACE: "1"
+    commands:
+      - apt-get update && apt-get install -y libopenblas-dev gfortran pkg-config
+      # Nur die lauffähigen CPU-Tests ausführen
+      - cargo test --verbose --features cpu
+
+  # 3. Analyze code quality using Clippy
+  - name: lint
+    image: *rust_image
+    commands:
+      - apt-get update && apt-get install -y libopenblas-dev gfortran pkg-config
+      - rustup component add clippy
+      # Clippy prüft alle Feature-Kombinationen auf Stil und Warnungen
+      - cargo clippy --all-features -- -D warnings
+
+  # 4. Generate test coverage metrics
+  - name: coverage
+    image: *rust_image
+    environment:
+      CARGO_INCREMENTAL: "0"
+      RUSTFLAGS: "-Cinstrument-coverage"
+      LLVM_PROFILE_FILE: "target/coverage/cargo-test-%p-%m.profraw"
+    commands:
+      # CMake und gcc werden zusätzlich für grcov benötigt
+      - apt-get update && apt-get install -y cmake build-essential gcc libopenblas-dev gfortran pkg-config
+      - rustup component add llvm-tools-preview
+      - cargo install grcov
+      # Abdeckung basierend auf dem aktiven CPU-Feature generieren
+      - cargo test --features cpu
+      - mkdir -p target/coverage/html
+      - grcov . --binary-path ./target/debug/deps/ -s . -t html --branch --ignore-not-existing --ignore '../*' --ignore "/*" -o target/coverage/html
+    when:
+      - status: [success, failure]
+
+  # 5. Cache cargo packages to speed up consecutive pipeline runs
+  - name: cache-save
+    image: meltwater/drone-cache
+    settings:
+      backend: "filesystem"
+      select:
+        - ~/.cargo/registry
+        - ~/.cargo/git
+        - target
+      save: true
+    when:
+      - event: push
+        status: success
+

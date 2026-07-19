@@ -1,0 +1,23 @@
+[package]
+name = "svdwrapper"
+version = "0.1.0"
+edition = "2024"
+
+[features]
+default = ["cpu", "cuda"]
+cuda = ["dep:cudarc"]
+cpu  = []
+opencl = []
+
+[build-dependencies]
+bindgen = "0.72.1"
+
+[dependencies]
+cudarc = { version = "0.19.3", features = ["driver", "nvrtc", "cusolver", "cuda-version-from-build-system"], optional = true }
+
+libc = "0.2"
+anyhow = "1.0.102"
+ndarray = { version = "0.17.2" }
+ndarray-linalg = { version = "0.18.1" }
+ndarray-rand = { version = "0.16" }
+num-complex = "0.4.6"
