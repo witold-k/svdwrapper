@@ -94,6 +94,7 @@ impl SvdManager<f64> {
     /// * The requested backend was not compiled in the active Cargo build profile.
     /// * The underlying numerical algorithm fails to converge.
     /// * Memory allocation boundaries or GPU data transfers encounter failures.
+    #[allow(unused_variables)]
     pub fn compute_svd(
         &self,
         a: &ArrayBase<impl Data<Elem = f64>, Ix2>,
@@ -133,6 +134,7 @@ impl SvdManager<f32> {
     /// * The requested backend was not compiled in the active Cargo build profile.
     /// * The underlying numerical algorithm fails to converge.
     /// * Memory allocation boundaries or GPU data transfers encounter failures.
+    #[allow(unused_variables)]
     pub fn compute_svd(
         &self,
         a: &ArrayBase<impl Data<Elem = f32>, Ix2>,
@@ -170,6 +172,7 @@ pub fn create_backend_f64(backend: Backend) -> SvdManager<f64> {
 /// Panics if:
 /// * A non-CUDA backend is requested (as `f32` SVD routines are exclusively implemented via CUDA in this crate).
 /// * The `cuda` Cargo feature flag was missing during the compilation stage.
+#[allow(unused_variables)]
 pub fn create_backend_f32(backend: Backend) -> SvdManager<f32> {
     match backend {
         #[cfg(feature = "cuda")]

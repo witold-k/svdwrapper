@@ -6,7 +6,7 @@ module_name      := file_name(current_dir)
 default: build
 
 build:
-    cargo build
+    cargo build --features cpu cuda
     RUST_BACKTRACE=1 cargo test
     cargo clippy
 

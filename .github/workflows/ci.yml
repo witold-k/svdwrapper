@@ -1,11 +1,12 @@
-# .github/workflows/ci.yml
-name: Rust CI
+name: rust ci
 
 on:
   push:
-    branches: [ main, master, develop ]
+    branches: 
+      - "*"
   pull_request:
-    branches: [ main, master, develop ]
+    branches: 
+      - "*"
 
 env:
   CARGO_TERM_COLOR: always
@@ -14,17 +15,21 @@ env:
 jobs:
   # 1. Build and Test Job
   build-and-test:
-    name: Build & Test
+    name: build & test
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
 
-      - name: Install System Dependencies (LAPACK / BLAS)
-        # Erforderlich, damit das ndarray-linalg / CPU-Backend auf Ubuntu kompiliert und linkt
+      - name: Install system dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y libopenblas-dev gfortran
+
+      - name: Install CUDA Toolkit
+        uses: jimver/cuda-toolkit@v0.2.35
+        with:
+          cuda: '13.1.0' 
 
       - name: Set up Rust toolchain
         uses: actions-rust-lang/setup-rust-toolchain@v1
@@ -32,32 +37,30 @@ jobs:
           toolchain: stable
           components: clippy, llvm-tools-preview
 
-      - name: Compile CPU Backend
-        # Baut das Projekt explizit mit dem CPU-Feature
+      - name: Compile CPU backend
         run: cargo build --verbose --features cpu
 
-      - name: Run CPU Test Suite
-        # Führt die CPU-Integrationstests aus
+      - name: Run CPU test suite
         run: cargo test --verbose --features cpu
 
-      - name: Verify CUDA Code Syntax
-        # Da der Runner keine Nvidia-GPU hat, prüfen wir hier zumindest,
-        # ob der CUDA-Code fehlerfrei kompiliert (ohne die Tests auszuführen).
+      - name: Verify CUDA code syntax
         run: cargo check --verbose --features cuda
 
-      - name: Run code linter
-        # Prüft den gesamten Code (für alle Features) auf Stil und Warnungen
-        run: cargo clippy --all-features -- -D warnings
+      - name: Run code linter (CPU)
+        run: cargo clippy --features cpu -- -D warnings
+
+      - name: Run code linter (CUDA)
+        run: cargo clippy --features cuda -- -D warnings
 
   # 2. Separate Coverage Job
   coverage:
-    name: Test Coverage
+    name: test coverage
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
 
-      - name: Install System Dependencies (LAPACK / BLAS)
+      - name: Install system dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y libopenblas-dev gfortran
@@ -68,26 +71,9 @@ jobs:
           toolchain: stable
           components: llvm-tools-preview
 
-      - name: Install grcov
-        run: cargo install grcov
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@cargo-llvm-cov
 
-      - name: Generate profile data
-        env:
-          CARGO_INCREMENTAL: "0"
-          RUSTFLAGS: "-Cinstrument-coverage"
-          LLVM_PROFILE_FILE: "target/coverage/cargo-test-%p-%m.profraw"
-        # Abdeckung wird basierend auf dem testbaren CPU-Backend generiert
-        run: cargo test --features cpu
-
-      - name: Process report with grcov
-        run: |
-          mkdir -p target/coverage/html
-          grcov . --binary-path ./target/debug/deps/ -s . -t html --branch --ignore-not-existing --ignore '../*' --ignore "/*" -o target/coverage/html
-
-      - name: Upload coverage report artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: coverage-report
-          path: target/coverage/html/
-          retention-days: 1
+      - name: Generate code coverage
+        run: cargo llvm-cov --features cpu --workspace --lcov --output-path lcov.info
 
