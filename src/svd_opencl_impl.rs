@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright (c) 2026 Witold Kaminski
 
-// src/svd_opencl_impl.rs
 use anyhow::anyhow;
 
 

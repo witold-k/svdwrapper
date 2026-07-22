@@ -8,6 +8,7 @@ default = []
 cuda = ["dep:cudarc"]
 cpu  = []
 opencl = []
+julia = []
 
 [build-dependencies]
 bindgen = "0.72.1"

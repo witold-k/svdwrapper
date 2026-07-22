@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright (c) 2026 Witold Kaminski
 
-// ===== ./src/svd_cuda_f64_impl.rs =====
 use crate::svd::{SvdBackend, SvdResult};
 use anyhow::{anyhow, Result};
 use cudarc::cusolver::sys::*;

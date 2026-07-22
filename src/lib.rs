@@ -13,7 +13,10 @@
 pub mod svd;
 
 #[cfg(feature = "cpu")]
-pub mod svd_cpu_impl;
+pub mod svd_cpu_f32_impl;
+
+#[cfg(feature = "cpu")]
+pub mod svd_cpu_f64_impl;
 
 #[cfg(feature = "cuda")]
 pub mod svd_cuda_f32_impl;
@@ -24,12 +27,17 @@ pub mod svd_cuda_f64_impl;
 #[cfg(feature = "opencl")]
 pub mod svd_opencl_impl;
 
+#[cfg(feature = "julia")]
+pub mod svd_julia_impl;
+
 use std::marker::PhantomData;
 use ndarray::{Array2, ArrayBase, Data, Ix2};
 use crate::svd::SvdBackend;
 
 #[cfg(feature = "cpu")]
-use crate::svd_cpu_impl::CpuSvd;
+use crate::svd_cpu_f32_impl::CpuF32Svd;
+#[cfg(feature = "cpu")]
+use crate::svd_cpu_f64_impl::CpuF64Svd;
 #[cfg(feature = "cuda")]
 use crate::svd_cuda_f32_impl::CudaF32Svd;
 #[cfg(feature = "cuda")]
@@ -41,13 +49,21 @@ use crate::svd_opencl_impl::OpenClSvd;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Backend {
     /// Classical CPU execution through dense LAPACK libraries (e.g., OpenBLAS, Intel MKL).
-    Cpu,
+    CpuF32,
+    /// Classical CPU execution through dense LAPACK libraries (e.g., OpenBLAS, Intel MKL).
+    CpuF64,
     /// GPU-accelerated execution with 32-bit floating-point precision via Nvidia cuSOLVER.
     CudaF32,
     /// GPU-accelerated execution with 64-bit floating-point precision via Nvidia cuSOLVER (Jacobi method).
     CudaF64,
     /// Hardware-agnostic GPU/accelerator execution over OpenCL.
-    OpenCl,
+    OpenClF32,
+    /// Hardware-agnostic GPU/accelerator execution over OpenCL.
+    OpenClF64,
+    /// use julia as middleware
+    JuliaF32,
+    /// use julia as middleware
+    JuliaF64,
 }
 
 /// The central resource and state manager for calculations on the chosen hardware pipeline.
@@ -56,17 +72,21 @@ pub enum Backend {
 /// and exposes a unified, generic interface to the user.
 pub enum SvdManager<T> {
     #[cfg(feature = "cpu")]
-    /// Active CPU backend for serial or multi-threaded LAPACK invocations.
-    Cpu(CpuSvd),
+    CpuF32(CpuF32Svd),
+    #[cfg(feature = "cpu")]
+    CpuF64(CpuF64Svd),
     #[cfg(feature = "cuda")]
-    /// Active CUDA backend providing `f32` single-precision computing.
     CudaF32(CudaF32Svd),
     #[cfg(feature = "cuda")]
-    /// Active CUDA backend providing `f64` double-precision computing.
     CudaF64(CudaF64Svd),
     #[cfg(feature = "opencl")]
-    /// Active OpenCL backend infrastructure.
-    OpenCl(OpenClSvd),
+    OpenClF32(OpenClF32Svd),
+    #[cfg(feature = "opencl")]
+    OpenClF64(OpenClF64Svd),
+    #[cfg(feature = "julia")]
+    JuliaF32(JuliaF32Svd),
+    #[cfg(feature = "opencl")]
+    JuliaF64(JuliaF64Svd),
     /// Internal type marker to accommodate generics without runtime memory overhead.
     _Marker(PhantomData<T>),
 }
@@ -101,11 +121,13 @@ impl SvdManager<f64> {
     ) -> anyhow::Result<(Array2<f64>, Array2<f64>, Array2<f64>)> {
         match self {
             #[cfg(feature = "cpu")]
-            Self::Cpu(b) => b.compute_svd(a).map_err(|e| anyhow::anyhow!(e)),
+            Self::CpuF64(b) => b.compute_svd(a).map_err(|e| anyhow::anyhow!(e)),
             #[cfg(feature = "cuda")]
             Self::CudaF64(b) => b.compute_svd(a),
             #[cfg(feature = "opencl")]
-            Self::OpenCl(b) => b.compute_svd(a),
+            Self::OpenF64Cl(b) => b.compute_svd(a),
+            #[cfg(feature = "julia")]
+            Self::JuliaF64(b) => b.compute_svd(a),
             _ => anyhow::bail!("The requested backend path is either not compiled or inactive for f64 execution."),
         }
     }
@@ -140,8 +162,14 @@ impl SvdManager<f32> {
         a: &ArrayBase<impl Data<Elem = f32>, Ix2>,
     ) -> anyhow::Result<(Array2<f32>, Array2<f32>, Array2<f32>)> {
         match self {
+            #[cfg(feature = "cpu")]
+            Self::CpuF32(b) => b.compute_svd(a).map_err(|e| anyhow::anyhow!(e)),
             #[cfg(feature = "cuda")]
             Self::CudaF32(b) => b.compute_svd(a),
+            #[cfg(feature = "opencl")]
+            Self::OpenF32Cl(b) => b.compute_svd(a),
+            #[cfg(feature = "julia")]
+            Self::JuliaF32(b) => b.compute_svd(a),
             _ => anyhow::bail!("The requested backend path is either not compiled or inactive for f32 execution."),
         }
     }
@@ -156,11 +184,13 @@ impl SvdManager<f32> {
 pub fn create_backend_f64(backend: Backend) -> SvdManager<f64> {
     match backend {
         #[cfg(feature = "cpu")]
-        Backend::Cpu => SvdManager::<f64>::Cpu(CpuSvd),
+        Backend::CpuF64 => SvdManager::<f64>::CpuF64(CpuF64Svd),
         #[cfg(feature = "cuda")]
         Backend::CudaF64 => SvdManager::<f64>::CudaF64(CudaF64Svd::new().unwrap()),
         #[cfg(feature = "opencl")]
-        Backend::OpenCl => SvdManager::<f64>::OpenCl(OpenClSvd::new().unwrap()),
+        Backend::OpenClF64 => SvdManager::<f64>::OpenCl(OpenClF64Svd::new().unwrap()),
+        #[cfg(feature = "julia")]
+        Backend::JuliaF64 => SvdManager::<f64>::OpenCl(JuliaF64Svd::new().unwrap()),
         _ => panic!("The requested f64 backend variant is not compiled in this build configuration."),
     }
 }
@@ -175,8 +205,14 @@ pub fn create_backend_f64(backend: Backend) -> SvdManager<f64> {
 #[allow(unused_variables)]
 pub fn create_backend_f32(backend: Backend) -> SvdManager<f32> {
     match backend {
+        #[cfg(feature = "cpu")]
+        Backend::CpuF32 => SvdManager::<f32>::CpuF32(CpuF32Svd),
         #[cfg(feature = "cuda")]
         Backend::CudaF32 => SvdManager::<f32>::CudaF32(CudaF32Svd::new().unwrap()),
+        #[cfg(feature = "opencl")]
+        Backend::OpenClF32 => SvdManager::<f32>::OpenCl(OpenClF32Svd::new().unwrap()),
+        #[cfg(feature = "julia")]
+        Backend::JuliaF32 => SvdManager::<f32>::OpenCl(JuliaF32Svd::new().unwrap()),
         _ => panic!("Only CudaF32 supports f32 SVD workloads in this compilation configuration."),
     }
 }

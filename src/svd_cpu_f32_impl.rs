@@ -1,19 +1,18 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright (c) 2026 Witold Kaminski
 
-// src/svd_cpu_impl.rs
 use anyhow::anyhow;
 use ndarray::{Array2, ArrayBase, Data, Ix2};
 use ndarray_linalg::SVD;
 use crate::svd::{SvdBackend, SvdResult};
 
-pub struct CpuSvd;
+pub struct CpuF32Svd;
 
-impl SvdBackend<f64> for CpuSvd {
+impl SvdBackend<f32> for CpuF32Svd {
     fn compute_svd(
         &self,
-        a: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-    ) -> SvdResult<f64> {
+        a: &ArrayBase<impl Data<Elem = f32>, Ix2>,
+    ) -> SvdResult<f32> {
         // Berechne SVD via LAPACK-Backend
         let (u, s, vt) = a.svd(true, true)?;
 
