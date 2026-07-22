@@ -7,8 +7,8 @@ default: build
 
 build:
     cargo build --features cpu,cuda
-    RUST_BACKTRACE=1 cargo test
-    cargo clippy
+    RUST_BACKTRACE=1 cargo test --features cpu,cuda
+    cargo clippy --features cpu,cuda
 
 fix:
     @RUST_BACKTRACE=1 aifix -l rust -t fix_code -f {{current_dir}} -f {{current_dir}}/..
