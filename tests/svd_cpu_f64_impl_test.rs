@@ -23,7 +23,7 @@ fn test_cpu_f64_svd_correctness() {
     ).unwrap();
 
     // 2. CPU Backend initialisieren
-    let backend = create_backend_f64(Backend::Cpu);
+    let backend = create_backend_f64(Backend::CpuF64);
 
     // 3. SVD berechnen
     let (u, sigma, vt) = backend.compute_svd(&a).expect("CPU SVD fehlgeschlagen");
@@ -61,7 +61,7 @@ fn benchmark_cpu_large_matrix() {
     let a = Array2::<f64>::random((10000, 10000), dist);
     println!("Matrix generiert in: {:?}", start_setup.elapsed());
 
-    let backend = create_backend_f64(Backend::Cpu);
+    let backend = create_backend_f64(Backend::CpuF64);
 
     println!("Starte SVD auf der CPU...");
     let start_calc = Instant::now();

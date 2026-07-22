@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright (c) 2026 Witold Kaminski
 
-#![cfg(feature = "cpu")]
+#![cfg(feature = "julia")]
 
 use svdwrapper::{create_backend_f32, Backend};
 use ndarray::Array2;
@@ -23,7 +23,7 @@ fn test_julia_f32_svd_correctness() {
     ).unwrap();
 
     // 2. CPU Backend initialisieren
-    let backend = create_backend_f32(Backend::Cpu);
+    let backend = create_backend_f32(Backend::Julia);
 
     // 3. SVD berechnen
     let (u, sigma, vt) = backend.compute_svd(&a).expect("CPU SVD fehlgeschlagen");
@@ -49,7 +49,7 @@ fn test_julia_f32_svd_correctness() {
             );
         }
     }
-    println!("✓ Mathematische Korrektheitsprüfung für CpuSvd erfolgreich bestanden!");
+    println!("✓ Mathematische Korrektheitsprüfung für JuliaSvd erfolgreich bestanden!");
 }
 
 #[test]
@@ -61,7 +61,7 @@ fn benchmark_julia_large_matrix() {
     let a = Array2::<f32>::random((10000, 10000), dist);
     println!("Matrix generiert in: {:?}", start_setup.elapsed());
 
-    let backend = create_backend_f32(Backend::Cpu);
+    let backend = create_backend_f32(Backend::Julia);
 
     println!("Starte SVD auf der CPU...");
     let start_calc = Instant::now();

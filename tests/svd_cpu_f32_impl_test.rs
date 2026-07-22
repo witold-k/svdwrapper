@@ -23,7 +23,7 @@ fn test_cpu_f32_svd_correctness() {
     ).unwrap();
 
     // 2. CPU Backend initialisieren
-    let backend = create_backend_f32(Backend::Cpu);
+    let backend = create_backend_f32(Backend::CpuF32);
 
     // 3. SVD berechnen
     let (u, sigma, vt) = backend.compute_svd(&a).expect("CPU SVD fehlgeschlagen");
@@ -38,7 +38,7 @@ fn test_cpu_f32_svd_correctness() {
     let a_reconstructed = u.dot(&sigma_vt);
 
     // Hohe Präzision dank f32 LAPACK-Unterstützung
-    let epsilon = 1e-12f32;
+    let epsilon = 1e-5f32;
     for r in 0..a.nrows() {
         for c in 0..a.ncols() {
             let diff = (a[[r, c]] - a_reconstructed[[r, c]]).abs();
@@ -61,7 +61,7 @@ fn benchmark_cpu_large_matrix() {
     let a = Array2::<f32>::random((10000, 10000), dist);
     println!("Matrix generiert in: {:?}", start_setup.elapsed());
 
-    let backend = create_backend_f32(Backend::Cpu);
+    let backend = create_backend_f32(Backend::CpuF32);
 
     println!("Starte SVD auf der CPU...");
     let start_calc = Instant::now();
