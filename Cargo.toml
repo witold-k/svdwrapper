@@ -5,16 +5,18 @@ edition = "2024"
 
 [features]
 default = []
-cuda = ["dep:cudarc"]
-cpu  = []
+cuda   = ["dep:cudarc"]
+cpu    = []
 opencl = []
-julia = []
+julia  = ["dep:jlrs"]
+rocm   = []
 
 [build-dependencies]
 bindgen = "0.72.1"
 
 [dependencies]
 cudarc = { version = "0.19.3", features = ["driver", "nvrtc", "cusolver", "cuda-version-from-build-system"], optional = true }
+jlrs = { version = "0.23", features = ["multi-rt", "jlrs-derive", "async-rt"], optional = true }
 
 libc = "0.2"
 anyhow = "1.0.102"

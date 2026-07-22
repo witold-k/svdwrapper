@@ -3,16 +3,19 @@
 
 use anyhow::anyhow;
 use ndarray::{Array2, ArrayBase, Data, Ix2};
-use ndarray_linalg::SVD;
+use jlrs::prelude::*;
+use jlrs::data::layout::tuple::Tuple;
+use jlrs::data::managed::array::TypedArray;
+use jlrs::memory::target::frame::LocalGcFrame;
 use crate::svd::{SvdBackend, SvdResult};
 
-pub struct CpuF32Svd;
+pub struct JuliaF64Svd;
 
-impl SvdBackend<f32> for CpuF32Svd {
+impl SvdBackend<f64> for JuliaF64Svd {
     fn compute_svd(
         &self,
-        a: &ArrayBase<impl Data<Elem = f32>, Ix2>,
-    ) -> SvdResult<f32> {
+        a: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+    ) -> SvdResult<f64> {
         // Berechne SVD via LAPACK-Backend
         let (u, s, vt) = a.svd(true, true)?;
 

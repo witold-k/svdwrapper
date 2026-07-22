@@ -7,15 +7,15 @@
 using LinearAlgebra
 
 function svd_cuda_f64(a::Array{Float64,2})
-    dA = a # CuArray(a)              # move to GPU
+    dA = CuArray(a)              # move to GPU
     F  = svd(dA)                 # SVD on GPU (CUSOLVER under the hood)
     # bring results back to CPU as regular Arrays
     return (Array(F.U), Array(F.S), Array(F.Vt))
 end
 
-function svd_cuda_f64(a::Array{Float32,2})
-    dA = a # CuArray(a)              # move to GPU
-    F  = svd(dA)                 # SVD on GPU (CUSOLVER under the hood)
+function svd_cpu_f64(a::Array{Float32,2})
+    dA = a 
+    F  = svd(dA)                 
     # bring results back to CPU as regular Arrays
     return (Array(F.U), Array(F.S), Array(F.Vt))
 end

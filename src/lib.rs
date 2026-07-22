@@ -25,10 +25,16 @@ pub mod svd_cuda_f32_impl;
 pub mod svd_cuda_f64_impl;
 
 #[cfg(feature = "opencl")]
-pub mod svd_opencl_impl;
+pub mod svd_opencl_f32_impl;
+
+#[cfg(feature = "opencl")]
+pub mod svd_opencl_f64_impl;
 
 #[cfg(feature = "julia")]
-pub mod svd_julia_impl;
+pub mod svd_julia_f32_impl;
+
+#[cfg(feature = "julia")]
+pub mod svd_julia_f64_impl;
 
 use std::marker::PhantomData;
 use ndarray::{Array2, ArrayBase, Data, Ix2};
@@ -42,6 +48,10 @@ use crate::svd_cpu_f64_impl::CpuF64Svd;
 use crate::svd_cuda_f32_impl::CudaF32Svd;
 #[cfg(feature = "cuda")]
 use crate::svd_cuda_f64_impl::CudaF64Svd;
+#[cfg(feature = "julia")]
+use crate::svd_julia_f32_impl::JuliaF32Svd;
+#[cfg(feature = "julia")]
+use crate::svd_julia_f64_impl::JuliaF64Svd;
 #[cfg(feature = "opencl")]
 use crate::svd_opencl_impl::OpenClSvd;
 
@@ -66,6 +76,10 @@ pub enum Backend {
     JuliaF64,
 }
 
+pub trait Precision: Sized {
+    fn create_manager(backend: Backend) -> SvdManager<Self>;
+}
+
 /// The central resource and state manager for calculations on the chosen hardware pipeline.
 ///
 /// This structure encapsulates hardware- and library-specific handles (such as cuSOLVER contexts Engine instances)
@@ -85,7 +99,7 @@ pub enum SvdManager<T> {
     OpenClF64(OpenClF64Svd),
     #[cfg(feature = "julia")]
     JuliaF32(JuliaF32Svd),
-    #[cfg(feature = "opencl")]
+    #[cfg(feature = "julia")]
     JuliaF64(JuliaF64Svd),
     /// Internal type marker to accommodate generics without runtime memory overhead.
     _Marker(PhantomData<T>),
