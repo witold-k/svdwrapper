@@ -5,7 +5,7 @@ use crate::svd::{SvdBackend, SvdResult};
 use anyhow::{anyhow, Result};
 use cudarc::cusolver::sys::*;
 use cudarc::driver::sys::*;
-use ndarray::{Array2, ArrayBase, Data, Ix2};
+use ndarray::{Array1, Array2, ArrayBase, Data, Ix2};
 
 pub struct CudaF64Svd {
     handle: cusolverDnHandle_t,
@@ -144,9 +144,9 @@ impl SvdBackend<f64> for CudaF64Svd {
                 }
             }
 
-            let mut sigma = Array2::zeros((m as usize, n as usize));
+            let mut sigma = Array1::zeros(k as usize);
             for i in 0..(k as usize) {
-                sigma[[i, i]] = s_vec[i];
+                sigma[[i]] = s_vec[i];
             }
 
             Ok((u, sigma, vt))

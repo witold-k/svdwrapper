@@ -3,7 +3,7 @@
 
 #![cfg(feature = "cuda")]
 
-use svdwrapper::{create_backend_f32, Backend}; // Passe den Cratename ggf. an deine Cargo.toml an
+use svdwrapper::{create_backend_f32, Backend, svd::mul_cpu_mat_vec_mat_f32}; // Passe den Cratename ggf. an deine Cargo.toml an
 use ndarray::{Array2};
 use ndarray_rand::RandomExt;
 use ndarray_rand::rand_distr::Uniform;
@@ -31,12 +31,11 @@ fn test_cuda_f32_svd_correctness() {
 
     // 4. Assertions auf die korrekten Matrix-Dimensionen
     assert_eq!(u.shape(), &[4, 4], "U-Matrix hat die falsche Dimension");
-    assert_eq!(sigma.shape(), &[4, 3], "Sigma-Matrix hat die falsche Dimension");
+    assert_eq!(sigma.shape(), &[3], "Sigma-Matrix hat die falsche Dimension");
     assert_eq!(vt.shape(), &[3, 3], "V^T-Matrix hat die falsche Dimension");
 
     // 5. Mathematische Validierung: Rekonstruktion A_reconstructed = U * Sigma * Vt
-    let sigma_vt = sigma.dot(&vt);
-    let a_reconstructed = u.dot(&sigma_vt);
+    let a_reconstructed = mul_cpu_mat_vec_mat_f32(&u, &sigma, &vt);
 
     // Vergleiche alle Elemente mit einer kleinen Toleranz (Epsilon) aufgrund von Floating-Point-Ungenauigkeiten
     let epsilon = 1e-4f32;

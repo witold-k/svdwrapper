@@ -2,7 +2,6 @@
 # using Pkg
 # Pkg.add("CUDA")
 
-# file content as a string in Rust
 #using CUDA
 using LinearAlgebra
 
@@ -13,7 +12,7 @@ function svd_cuda_f64(a::Array{Float64,2})
     return (Array(F.U), Array(F.S), Array(F.Vt))
 end
 
-function svd_cpu_f64(a::Array{Float32,2})
+function svd_cpu_f64(a::Array{Float64,2})
     dA = a 
     F  = svd(dA)                 
     # bring results back to CPU as regular Arrays

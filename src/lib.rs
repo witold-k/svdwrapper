@@ -37,7 +37,7 @@ pub mod svd_julia_f32_impl;
 pub mod svd_julia_f64_impl;
 
 use std::marker::PhantomData;
-use ndarray::{Array2, ArrayBase, Data, Ix2};
+use ndarray::{Array1, Array2, ArrayBase, Data, Ix2};
 #[cfg(any(
     feature = "cpu",
     feature = "cuda",
@@ -138,7 +138,7 @@ impl SvdManager<f64> {
     pub fn compute_svd(
         &self,
         a: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-    ) -> anyhow::Result<(Array2<f64>, Array2<f64>, Array2<f64>)> {
+    ) -> anyhow::Result<(Array2<f64>, Array1<f64>, Array2<f64>)> {
         match self {
             #[cfg(feature = "cpu")]
             Self::CpuF64(b) => b.compute_svd(a).map_err(|e| anyhow::anyhow!(e)),
@@ -180,7 +180,7 @@ impl SvdManager<f32> {
     pub fn compute_svd(
         &self,
         a: &ArrayBase<impl Data<Elem = f32>, Ix2>,
-    ) -> anyhow::Result<(Array2<f32>, Array2<f32>, Array2<f32>)> {
+    ) -> anyhow::Result<(Array2<f32>, Array1<f32>, Array2<f32>)> {
         match self {
             #[cfg(feature = "cpu")]
             Self::CpuF32(b) => b.compute_svd(a).map_err(|e| anyhow::anyhow!(e)),
@@ -210,7 +210,7 @@ pub fn create_backend_f64(backend: Backend) -> SvdManager<f64> {
         #[cfg(feature = "opencl")]
         Backend::OpenClF64 => SvdManager::<f64>::OpenCl(OpenClF64Svd::new().unwrap()),
         #[cfg(feature = "julia")]
-        Backend::JuliaF64 => SvdManager::<f64>::OpenCl(JuliaF64Svd::new().unwrap()),
+        Backend::JuliaF64 => SvdManager::<f64>::JuliaF64(JuliaF64Svd{}),
         _ => panic!("The requested f64 backend variant is not compiled in this build configuration."),
     }
 }
@@ -232,7 +232,7 @@ pub fn create_backend_f32(backend: Backend) -> SvdManager<f32> {
         #[cfg(feature = "opencl")]
         Backend::OpenClF32 => SvdManager::<f32>::OpenCl(OpenClF32Svd::new().unwrap()),
         #[cfg(feature = "julia")]
-        Backend::JuliaF32 => SvdManager::<f32>::OpenCl(JuliaF32Svd::new().unwrap()),
+        Backend::JuliaF32 => SvdManager::<f32>::JuliaF32(JuliaF32Svd{}),
         _ => panic!("Only CudaF32 supports f32 SVD workloads in this compilation configuration."),
     }
 }

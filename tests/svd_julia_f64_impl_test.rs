@@ -3,7 +3,7 @@
 
 #![cfg(feature = "julia")]
 
-use svdwrapper::{create_backend_f64, Backend};
+use svdwrapper::{create_backend_f64, Backend, svd::mul_cpu_mat_vec_mat_f64};
 use ndarray::Array2;
 use ndarray_rand::RandomExt;
 use ndarray_rand::rand_distr::Uniform;
@@ -23,19 +23,18 @@ fn test_julia_f64_svd_correctness() {
     ).unwrap();
 
     // 2. CPU Backend initialisieren
-    let backend = create_backend_f64(Backend::Julia);
+    let backend = create_backend_f64(Backend::JuliaF64);
 
     // 3. SVD berechnen
     let (u, sigma, vt) = backend.compute_svd(&a).expect("CPU SVD fehlgeschlagen");
 
     // 4. Dimensionen validieren (Sigma MUSS 4x3 sein, nicht 3x3)
-    assert_eq!(u.shape(), &[4, 4], "U-Matrix hat falsche Dimension");
-    assert_eq!(sigma.shape(), &[4, 3], "Sigma-Matrix hat falsche Dimension");
+    assert_eq!(u.shape(), &[4, 3], "U-Matrix hat falsche Dimension");
+    assert_eq!(sigma.shape(), &[3], "Sigma-Matrix hat falsche Dimension");
     assert_eq!(vt.shape(), &[3, 3], "V^T-Matrix hat falsche Dimension");
 
     // 5. Mathematische Validierung via Rekonstruktion: A = U * Sigma * Vt
-    let sigma_vt = sigma.dot(&vt);
-    let a_reconstructed = u.dot(&sigma_vt);
+    let a_reconstructed = mul_cpu_mat_vec_mat_f64(&u, &sigma, &vt);
 
     // Hohe Präzision dank f64 LAPACK-Unterstützung
     let epsilon = 1e-12f64;
@@ -61,7 +60,7 @@ fn benchmark_julia_large_matrix() {
     let a = Array2::<f64>::random((10000, 10000), dist);
     println!("Matrix generiert in: {:?}", start_setup.elapsed());
 
-    let backend = create_backend_f64(Backend::Julia);
+    let backend = create_backend_f64(Backend::JuliaF64);
 
     println!("Starte SVD auf der CPU...");
     let start_calc = Instant::now();

@@ -13,6 +13,7 @@ rocm   = []
 
 [build-dependencies]
 bindgen = "0.72.1"
+walkdir = "2"
 
 [dependencies]
 cudarc = { version = "0.19.3", features = ["driver", "nvrtc", "cusolver", "cuda-version-from-build-system"], optional = true }

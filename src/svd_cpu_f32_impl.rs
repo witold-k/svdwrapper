@@ -2,7 +2,7 @@
 // Copyright (c) 2026 Witold Kaminski
 
 use anyhow::anyhow;
-use ndarray::{Array2, ArrayBase, Data, Ix2};
+use ndarray::{Array1, ArrayBase, Data, Ix2};
 use ndarray_linalg::SVD;
 use crate::svd::{SvdBackend, SvdResult};
 
@@ -22,13 +22,11 @@ impl SvdBackend<f32> for CpuF32Svd {
 
         let m = a.nrows();
         let n = a.ncols();
+        let k = std::cmp::min(m, n);
 
-        // FIX 2: Sigma muss exakt die Dimension M x N besitzen (wichtig für rechteckige Matrizen)
-        let mut sigma = Array2::zeros((m, n));
-        for (i, &val) in s.iter().enumerate() {
-            if i < m && i < n {
-                sigma[[i, i]] = val;
-            }
+        let mut sigma = Array1::zeros(k as usize);
+        for i in 0..(k as usize) {
+            sigma[[i]] = s[i];
         }
 
         Ok((u_mat, sigma, vt_mat))

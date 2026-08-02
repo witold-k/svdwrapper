@@ -3,7 +3,7 @@
 
 #![cfg(feature = "cpu")]
 
-use svdwrapper::{create_backend_f64, Backend};
+use svdwrapper::{create_backend_f64, Backend, svd::mul_cpu_mat_vec_mat_f64};
 use ndarray::Array2;
 use ndarray_rand::RandomExt;
 use ndarray_rand::rand_distr::Uniform;
@@ -30,12 +30,11 @@ fn test_cpu_f64_svd_correctness() {
 
     // 4. Dimensionen validieren (Sigma MUSS 4x3 sein, nicht 3x3)
     assert_eq!(u.shape(), &[4, 4], "U-Matrix hat falsche Dimension");
-    assert_eq!(sigma.shape(), &[4, 3], "Sigma-Matrix hat falsche Dimension");
+    assert_eq!(sigma.shape(), &[3], "Sigma-Matrix hat falsche Dimension");
     assert_eq!(vt.shape(), &[3, 3], "V^T-Matrix hat falsche Dimension");
 
     // 5. Mathematische Validierung via Rekonstruktion: A = U * Sigma * Vt
-    let sigma_vt = sigma.dot(&vt);
-    let a_reconstructed = u.dot(&sigma_vt);
+    let a_reconstructed = mul_cpu_mat_vec_mat_f64(&u, &sigma, &vt);
 
     // Hohe Präzision dank f64 LAPACK-Unterstützung
     let epsilon = 1e-12f64;

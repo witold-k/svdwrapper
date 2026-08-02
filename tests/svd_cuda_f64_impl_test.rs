@@ -3,7 +3,7 @@
 
 #![cfg(feature = "cuda")]
 
-use svdwrapper::{create_backend_f64, Backend}; // Passe den Cratename ggf. an deine Cargo.toml an
+use svdwrapper::{create_backend_f64, Backend, svd::mul_cpu_mat_vec_mat_f64}; // Passe den Cratename ggf. an deine Cargo.toml an
 use ndarray::Array2;
 use ndarray_rand::RandomExt;
 use ndarray_rand::rand_distr::Uniform;
@@ -31,12 +31,11 @@ fn test_cuda_f64_svd_correctness() {
 
     // 4. Dimensions-Validierung
     assert_eq!(u.shape(), &[4, 4], "U-Matrix hat die falsche Dimension");
-    assert_eq!(sigma.shape(), &[4, 3], "Sigma-Matrix hat die falsche Dimension");
+    assert_eq!(sigma.shape(), &[3], "Sigma-Matrix hat die falsche Dimension");
     assert_eq!(vt.shape(), &[3, 3], "V^T-Matrix hat die falsche Dimension");
 
     // 5. Mathematische Validierung: Rekonstruktion A = U * Sigma * Vt
-    let sigma_vt = sigma.dot(&vt);
-    let a_reconstructed = u.dot(&sigma_vt);
+    let a_reconstructed = mul_cpu_mat_vec_mat_f64(&u, &sigma, &vt);
 
     // Da wir f64 nutzen, wählen wir eine entsprechend schärfere Toleranz (Epsilon)
     let epsilon = 1e-12f64;
