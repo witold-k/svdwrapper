@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Witold Kaminski
+
 # call julia and execute first
 # using Pkg
 # Pkg.add("CUDA")
