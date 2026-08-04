@@ -7,7 +7,7 @@ default: build
 
 build:
     cargo build --features cpu,cuda
-    RUST_BACKTRACE=1 cargo test --features cpu,cuda
+    RUST_BACKTRACE=1 cargo test --features cpu,cuda,
     cargo clippy --features cpu,cuda
 
 fix:

@@ -1,3 +1,4 @@
+#[cfg(any(feature = "julia", feature = "opencl"))]
 use std::path::{Path, PathBuf};
 #[cfg(feature = "julia")]
 use std::env;
@@ -104,6 +105,7 @@ fn julia() {
     panic!("Could not locate Julia installation. Set JLRS_JULIA_DIR manually.");
 }
 
+#[cfg(feature = "julia")]
 fn find_julia_dir(base: &PathBuf) -> Option<PathBuf> {
     // Recursively search for include/julia/julia_version.h
     for entry in walkdir::WalkDir::new(base).into_iter().filter_map(|e| e.ok()) {
@@ -116,6 +118,7 @@ fn find_julia_dir(base: &PathBuf) -> Option<PathBuf> {
     None
 }
 
+#[cfg(feature = "julia")]
 fn find_libjulia(dir: &Path) -> Option<PathBuf> {
     let lib = dir.join("lib").join("libjulia.so");
     if lib.exists() {
