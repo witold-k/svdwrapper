@@ -1,4 +1,3 @@
-#[cfg(feature = "julia")]
 use std::path::{Path, PathBuf};
 #[cfg(feature = "julia")]
 use std::env;
