@@ -1,6 +1,7 @@
 # svdwrapper
 
-A highly optimized, hardware-agnostic abstraction layer for computing the Singular Value Decomposition (SVD) of 2D matrices in Rust. This crate allows seamless switching between CPU-based LAPACK routines and GPU-accelerated pipelines (Nvidia CUDA/cuSOLVER and OpenCL) via Cargo features.
+A hardware-agnostic abstraction layer for computing the Singular Value Decomposition (SVD) of 2D matrices in Rust.
+This crate allows seamless switching between CPU-based LAPACK routines and GPU-accelerated pipelines (Nvidia CUDA/cuSOLVER and in future OpenCL) via Cargo features.
 
 Mathematical formulation: A = U * Sigma * Vt
 
