@@ -7,6 +7,12 @@ Mathematical formulation: A = U * Sigma * Vt
 
 ---
 
+## General
+
+under work, halted for now. needs documentation fix, optimisations, more tests and opencl implementation, may be rocm one day - no hurry. also porper error handling in cuda part.
+work will be continued after aiagents will become a little usable, since this could be also part of a workflow there, i think. do not take the documentation too serious.
+it is generated. - all is in flow....
+
 ## Architectural Overview
 
 The core philosophy of svdwrapper is to separate the high-level matrix API from the underlying hardware-specific execution pipelines. It guarantees API Symmetry: whether you compute an SVD on an industrial server CPU or stream it to a data center GPU, the function signatures and matrix output shapes remain identical.
@@ -125,7 +131,7 @@ fn main() -> anyhow::Result<()> {
 
     println!("Decomposition successful!");
     println!("U matrix shape:     {:?}", u.shape());     // (4000, 4000)
-    println!("Sigma matrix shape: {:?}", sigma.shape()); // (4000, 3000)
+    println!("Sigma matrix shape: {:?}", sigma.shape()); // (4000)
     println!("V^T matrix shape:   {:?}", vt.shape());    // (3000, 3000)
 
     Ok(())
