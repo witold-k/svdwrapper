@@ -1,148 +1,74 @@
 # svdwrapper
 
-A hardware-agnostic abstraction layer for computing the Singular Value Decomposition (SVD) of 2D matrices in Rust.
-This crate allows seamless switching between CPU-based LAPACK routines and GPU-accelerated pipelines (Nvidia CUDA/cuSOLVER and in future OpenCL) via Cargo features.
+`svdwrapper` is an experimental Rust abstraction for computing dense singular value decompositions (SVD) through interchangeable numerical backends.
 
-Mathematical formulation: A = U * Sigma * Vt
-
----
-
-## General
-
-under work, halted for now. needs documentation fix, optimisations, more tests and opencl implementation, may be rocm one day - no hurry. also porper error handling in cuda part.
-work will be continued after aiagents will become a little usable, since this could be also part of a workflow there, i think. do not take the documentation too serious.
-it is generated. - all is in flow....
-
-## Architectural Overview
-
-The core philosophy of svdwrapper is to separate the high-level matrix API from the underlying hardware-specific execution pipelines. It guarantees API Symmetry: whether you compute an SVD on an industrial server CPU or stream it to a data center GPU, the function signatures and matrix output shapes remain identical.
+The intended public model is simple:
 
 ```text
-+-----------------------------------------------------------------+
-|                           Client Code                           |
-+-----------------------------------------------------------------+
-                                 |
-        +------------------------+------------------------+
-        |                                                 |
-        v                                                 v
-SvdManager<f32>::compute_svd                      SvdManager<f64>::compute_svd
-        |                                                 |
-        v                                                 v
- [Pattern Matching]                                [Pattern Matching]
-        |                                                 |
-        +-------+                                 +-------+-------+
-        |       |                                 |       |       |
-        v       v                                 v       v       v
-     [cuda]   [cpu]                            [cpu]   [cuda]  [opencl]
-   CudaF32Svd CpuSvd                          CpuSvd CudaF64Svd OpenClSvd
-  (cuSOLVER) (LAPACK)                        (LAPACK) (gesvdj) (Kernels)
+A = U * diag(S) * Vt
 ```
 
-Key Structural Highlights:
+Backends expose the same high-level Rust API and return `(U, S, Vt)`, with the singular values stored as a vector.
 
-* Memory-Layout Bridge: ndarray natively stores data in a row-major (C-style) format,
-    whereas vendor-provided high-performance libraries (LAPACK, cuSOLVER, Jacobi solvers)
-    strictly require column-major (Fortran-style) configurations.
-    svdwrapper handles this pivot layer safely under the hood,
-    guaranteeing mathematically exact transformations while also handling non-contiguous matrix slices.
+The project is under active development. CPU, CUDA and Julia paths already exist; the immediate work is to make those paths consistent, well-tested and documented. OpenCL and ROCm are deliberately lower-priority future work.
 
-* Unified Output Layout: Standard LAPACK/cuSOLVER routines return singular values
-    as a reduced 1D vector to minimize bandwidth.
-    svdwrapper automatically projects these elements back into a fully populated 2D diagonal
-    matrix (Sigma) of dimension M x N, eliminating asymmetric downstream multiplication constraints.
+## Current status
 
-* RAII Resource Management: Hardware handles, primary driver contexts (CUcontext),
-    and solver channels (cusolverDnHandle_t) are strictly tied to Rust's type system.
-    All active device layers are cleanly de-allocated via Drop semantics upon scope exit, neutralizing GPU memory leaks.
+| Backend | Precision | Status |
+| --- | --- | --- |
+| CPU / LAPACK | f32, f64 | Implemented; needs broader correctness tests and cleanup |
+| NVIDIA CUDA / cuSOLVER | f32, f64 | Implemented; needs stronger error handling, cleanup and broader tests |
+| Julia | f32, f64 | Implemented; needs cleanup, documentation and broader tests |
+| OpenCL | f32, f64 | Experimental/incomplete; not part of the near-term stabilization target |
+| AMD ROCm | - | Placeholder only; future work |
 
----
+This is not yet a production-ready crate. APIs and backend internals may still change while the core implementation is being consolidated.
 
-## Prerequisites and Installation
+## Design goals
 
-Building this crate requires specific system dependencies depending on your active features.
-Ensure your host system satisfies the following setup before building.
+The main goal is a small backend-independent interface for dense SVD while keeping backend-specific code isolated.
 
-### 1. System Packages (Ubuntu/Debian)
+In particular:
 
-To compile the underlying bindgen-generated MAGMA or cuSOLVER C bindings,
-you must install the LLVM/Clang developer tooling and MAGMA development libraries:
+- CPU, CUDA and Julia implementations should expose equivalent semantics.
+- Both `f32` and `f64` should be supported where the backend permits it.
+- Singular values are represented as a one-dimensional vector rather than an expanded diagonal matrix.
+- Rectangular matrices must be handled correctly for both `m > n` and `m < n`.
+- Backend resources should follow Rust ownership/RAII rules.
+- Errors from numerical libraries, CUDA and runtime setup should be propagated rather than hidden behind panics where practical.
 
-```bash
-sudo apt update
-sudo apt install -y llvm-dev libclang-dev clang
-sudo apt install -y libmagma-dev libmagma2
-sudo apt install -y libopenblas-dev gfortran pkg-config
-```
+## Cargo features
 
-### 2. Environment Configuration
-
-For CUDA-accelerated paths, the build system must be able to discover your local CUDA Toolkit installation.
-Ensure the following rules are set up:
-
-* CUDA_HOME environment variable must be exported and point to your CUDA directory.
-* The Nvidia CUDA Compiler (nvcc) must be globally available inside your PATH.
-
-```bash
-Example setup (.bashrc / .zshrc):
-export CUDA_HOME=/usr/local/cuda
-export PATH=$CUDA_HOME/bin:$PATH
-```
----
-
-## Cargo Features
-
-Tailor the crate's footprint to your target deployment infrastructure by enabling or disabling specific backends in your Cargo.toml:
+No backend is enabled by default.
 
 ```toml
 [dependencies]
+svdwrapper = { version = "0.1.0", features = ["cpu"] }
+```
+
+Available feature flags:
+
+```text
+cpu     CPU SVD through ndarray-linalg / LAPACK
+cuda    NVIDIA CUDA SVD through cuSOLVER
+julia   Julia-backed SVD through jlrs
+opencl  Experimental OpenCL/MAGMA path
+rocm    Reserved for a future AMD ROCm backend
+```
+
+For example, CPU and CUDA can be enabled together:
+
+```toml
 svdwrapper = { version = "0.1.0", features = ["cpu", "cuda"] }
 ```
 
-```text
-Feature Flag | Target Architecture   | Underlying Engine               | Precision
--------------+-----------------------+---------------------------------+-----------
-"cpu"        | Standard x86_64 / ARM | System LAPACK (OpenBLAS/MKL)    | f64
-"cuda"       | Nvidia GPUs           | CUDA Driver API & cuSOLVER      | f32 & f64
-"opencl"     | Agnostic Accelerators | Custom OpenCL Compute Kernels   | f64
-```
+## Basic usage
 
----
-
-## Quick Start and Usage Examples
-
-1. Single-Precision (f32) on Nvidia GPU
+### CPU, f64
 
 ```rust
-use svdwrapper::{create_backend_f32, Backend};
 use ndarray::Array2;
-use ndarray_rand::RandomExt;
-use ndarray_rand::rand_distr::Uniform;
-
-fn main() -> anyhow::Result<()> {
-    // 1. Generate a random rectangular matrix on the host CPU
-    let dist = Uniform::new(1.0, 10.0).unwrap();
-    let a = Array2::<f32>::random((4000, 3000), dist);
-
-    // 2. Instantiate the CUDA f32 pipeline (allocates GPU handles internally)
-    let backend = create_backend_f32(Backend::CudaF32);
-
-    // 3. Stream data to device, execute full SVD, and collect results back into RAM
-    let (u, sigma, vt) = backend.compute_svd(&a)?;
-
-    println!("Decomposition successful!");
-    println!("U matrix shape:     {:?}", u.shape());     // (4000, 4000)
-    println!("Sigma matrix shape: {:?}", sigma.shape()); // (4000)
-    println!("V^T matrix shape:   {:?}", vt.shape());    // (3000, 3000)
-
-    Ok(())
-}
-```
-
-2. Double-Precision (f64) on CPU (LAPACK)
-
-```rust
 use svdwrapper::{create_backend_f64, Backend};
-use ndarray::Array2;
 
 fn main() -> anyhow::Result<()> {
     let a = Array2::from_shape_vec(
@@ -155,40 +81,115 @@ fn main() -> anyhow::Result<()> {
         ],
     )?;
 
-    // Initialize CPU/LAPACK driver
-    let backend = create_backend_f64(Backend::Cpu);
-    let (u, sigma, vt) = backend.compute_svd(&a)?;
+    let backend = create_backend_f64(Backend::CpuF64);
+    let (u, s, vt) = backend.compute_svd(&a)?;
 
-    // Mathematically reconstruct the original matrix: A = U * Sigma * Vt
-    let reconstructed = u.dot(&sigma).dot(&vt);
-    println!("Reconstruction check passed.");
+    println!("U:  {:?}", u.shape());
+    println!("S:  {:?}", s.shape());
+    println!("Vt: {:?}", vt.shape());
 
     Ok(())
 }
 ```
 
----
+For an `m x n` matrix, `S` contains `min(m, n)` singular values. The crate provides helper functions in `svdwrapper::svd` for reconstructing matrices from `U`, `S` and `Vt`.
 
-## Local Verification and Testing
+### CUDA
 
-The crate includes separate integration tests that validate the mathematical correctness of both
-rectangular and square transformations down to strict machine epsilon boundaries (diff <= 1e-12 for double-precision).
+The CUDA backend currently supports both `f32` and `f64`:
 
-Running Core CPU Tests:
+```rust
+use svdwrapper::{create_backend_f32, Backend};
+
+let backend = create_backend_f32(Backend::CudaF32);
+let (u, s, vt) = backend.compute_svd(&a)?;
+```
+
+A working NVIDIA driver and CUDA toolkit are required. The build script looks for `CUDA_HOME` or `CUDA_PATH` and otherwise falls back to `/usr/local/cuda`.
+
+## System dependencies
+
+### CPU
+
+The CPU path uses `ndarray-linalg` and a system BLAS/LAPACK implementation. On Debian/Ubuntu, OpenBLAS can be installed with:
+
+```bash
+sudo apt install libopenblas-dev gfortran pkg-config
+```
+
+Exact requirements can vary with the BLAS/LAPACK configuration used by `ndarray-linalg`.
+
+### CUDA
+
+The CUDA path requires:
+
+- an NVIDIA GPU and driver,
+- a compatible CUDA toolkit,
+- CUDA headers and libraries visible to the build.
+
+A typical local setup is:
+
+```bash
+export CUDA_HOME=/usr/local/cuda
+export PATH="$CUDA_HOME/bin:$PATH"
+```
+
+### Julia
+
+The Julia backend uses `jlrs`. The build script can discover common Juliaup locations, or the Julia installation can be supplied explicitly:
+
+```bash
+export JLRS_JULIA_DIR=/path/to/julia
+```
+
+## Testing
+
+Backend-specific tests can be selected through Cargo features:
+
 ```bash
 cargo test --features cpu
-```
-
-Running Nvidia GPU Tests:
-Ensure you have the Nvidia CUDA Toolkit and structural GPU drivers configured locally on your development machine before launching:
-```bash
 cargo test --features cuda
+cargo test --features julia
 ```
 
-Running High-Volume Matrix Benchmarks:
-To evaluate hardware execution scaling against massive arrays (10000 x 10000)
-without logging flooding data to the standard output, trigger the performance benchmarks under the --release flag:
-```bash
-cargo test --release -- --ignored --nocapture
-```
+Some large-matrix timing tests are marked `#[ignore]` and are intended for explicit local runs rather than normal correctness testing.
 
+The current test suite already checks basic reconstruction for rectangular matrices. It still needs to be expanded before the crate can be considered mature.
+
+## Near-term roadmap
+
+The next development phase is focused on completing and hardening the already useful backends rather than adding more hardware targets.
+
+Planned near-term work:
+
+1. Make the public documentation and implementation agree on the `(U, S, Vt)` representation.
+2. Remove stale comments and backend naming inconsistencies.
+3. Improve CUDA initialization, allocation and solver error handling.
+4. Reduce avoidable panics in backend construction and return useful errors instead.
+5. Expand correctness coverage for:
+   - `m > n`, `m < n`, and square matrices,
+   - rank-deficient matrices,
+   - zero and identity matrices,
+   - ill-conditioned inputs,
+   - non-contiguous ndarray views,
+   - orthogonality of `U` and `V`,
+   - reconstruction `A ≈ U * diag(S) * Vt`,
+   - non-negative, descending singular values.
+6. Bring the Julia path to the same API and testing standard as CPU and CUDA.
+7. Add focused documentation and examples once the interfaces stop moving.
+
+## Later work
+
+OpenCL and ROCm are intentionally not near-term goals.
+
+The existing OpenCL/MAGMA code should currently be treated as experimental scaffolding rather than a supported backend. It can be revisited after CPU, CUDA and Julia are consistent and well-tested.
+
+ROCm is a future backend idea only. No working ROCm implementation exists at present.
+
+## Scope
+
+`svdwrapper` is currently concerned with **dense SVD**. Sparse, randomized or truncated SVD algorithms are outside the present scope.
+
+## License
+
+Apache-2.0.
