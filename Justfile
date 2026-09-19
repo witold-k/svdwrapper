@@ -19,7 +19,9 @@ benchmark:
     cargo test --release --features cpu,cuda,julia -- --ignored --nocapture
 
 run:
-    cargo run --features cpu,cuda
+    cargo run --release --bin cuda --features cuda
+    cargo run --release --bin julia --features julia
+    cargo run --release --bin cpu --features cpu
 
 fix:
     @RUST_BACKTRACE=1 aifix -l rust -t fix_code -f {{current_dir}} -f {{current_dir}}/..
