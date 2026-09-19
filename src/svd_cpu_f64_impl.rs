@@ -3,7 +3,7 @@
 
 use anyhow::anyhow;
 use ndarray::{ArrayBase, Data, Ix2};
-use ndarray_linalg::SVD;
+use ndarray_linalg::{JobSvd, SVDDC};
 use crate::svd::{SvdBackend, SvdResult};
 
 pub struct CpuF64Svd;
@@ -17,7 +17,7 @@ impl SvdBackend<f64> for CpuF64Svd {
             return Err(anyhow!("SVD input matrix must be non-empty"));
         }
 
-        let (u, singular_values, vt) = a.svd(true, true)?;
+        let (u, singular_values, vt) = a.svddc(JobSvd::All)?;
 
         let u = u.ok_or_else(|| anyhow!("LAPACK did not return U"))?;
         let vt = vt.ok_or_else(|| anyhow!("LAPACK did not return V^T"))?;
