@@ -146,3 +146,22 @@ fn reduced_mode_has_reduced_shapes() {
         }
     }
 }
+
+#[test]
+fn reduced_mode_handles_wide_matrix() {
+    let a = Array2::<f32>::from_shape_fn((3, 4), |(row, col)| (row * 4 + col + 1) as f32);
+    let backend = Svd::<f32>::new(Backend::Julia).expect("Julia backend initialization failed");
+    let output = backend
+        .compute(&a, SvdMode::Reduced)
+        .expect("reduced wide SVD failed");
+
+    assert_eq!(output.u.dim(), (3, 3));
+    assert_eq!(output.s.len(), 3);
+    assert_eq!(output.vt.dim(), (3, 4));
+    let reconstructed = reconstruct(&output.u, &output.s, &output.vt);
+    for row in 0..a.nrows() {
+        for col in 0..a.ncols() {
+            assert!((a[(row, col)] - reconstructed[(row, col)]).abs() <= EPSILON);
+        }
+    }
+}

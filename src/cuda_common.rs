@@ -19,14 +19,36 @@ pub(crate) fn checked_bytes<T>(elements: usize, what: &str) -> Result<usize> {
         .ok_or_else(|| anyhow!("byte-size overflow while allocating {what}"))
 }
 
+pub(crate) struct CurrentContextGuard {
+    previous: CUcontext,
+}
+
+impl CurrentContextGuard {
+    pub(crate) fn activate(ctx: CUcontext) -> Result<Self> {
+        let mut previous = std::ptr::null_mut();
+        unsafe {
+            check_cuda(cuCtxGetCurrent(&mut previous), "cuCtxGetCurrent")?;
+            check_cuda(cuCtxSetCurrent(ctx), "cuCtxSetCurrent")?;
+        }
+        Ok(Self { previous })
+    }
+}
+
+impl Drop for CurrentContextGuard {
+    fn drop(&mut self) {
+        unsafe {
+            let _ = cuCtxSetCurrent(self.previous);
+        }
+    }
+}
+
 pub(crate) struct DeviceBuffer {
     ptr: CUdeviceptr,
     bytes: usize,
-    ctx: CUcontext,
 }
 
 impl DeviceBuffer {
-    pub(crate) fn new(bytes: usize, what: &str, ctx: CUcontext) -> Result<Self> {
+    pub(crate) fn new(bytes: usize, what: &str) -> Result<Self> {
         if bytes == 0 {
             return Err(anyhow!("cannot allocate zero bytes for {what}"));
         }
@@ -35,7 +57,7 @@ impl DeviceBuffer {
         unsafe {
             check_cuda(cuMemAlloc_v2(&mut ptr, bytes), &format!("allocating {what}"))?;
         }
-        Ok(Self { ptr, bytes, ctx })
+        Ok(Self { ptr, bytes })
     }
 
     pub(crate) fn ptr(&self) -> CUdeviceptr {
@@ -51,7 +73,6 @@ impl DeviceBuffer {
             ));
         }
         unsafe {
-            check_cuda(cuCtxSetCurrent(self.ctx), "cuCtxSetCurrent before host-to-device copy")?;
             check_cuda(
                 cuMemcpyHtoD_v2(self.ptr, source.as_ptr().cast(), bytes),
                 &format!("copying {what} to device"),
@@ -68,7 +89,6 @@ impl DeviceBuffer {
             ));
         }
         unsafe {
-            check_cuda(cuCtxSetCurrent(self.ctx), "cuCtxSetCurrent before device-to-host copy")?;
             check_cuda(
                 cuMemcpyDtoH_v2(destination.as_mut_ptr().cast(), self.ptr, bytes),
                 &format!("copying {what} to host"),
@@ -81,7 +101,6 @@ impl Drop for DeviceBuffer {
     fn drop(&mut self) {
         if self.ptr != 0 {
             unsafe {
-                let _ = cuCtxSetCurrent(self.ctx);
                 let _ = cuMemFree_v2(self.ptr);
             }
         }

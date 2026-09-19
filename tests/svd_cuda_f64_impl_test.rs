@@ -141,3 +141,18 @@ fn reduced_mode_has_reduced_shapes() {
     let reconstructed = reconstruct(&output.u, &output.s, &output.vt);
     assert_matrix_close(&reconstructed, &a, EPSILON);
 }
+
+#[test]
+fn reduced_mode_handles_wide_matrix() {
+    let a = Array2::<f64>::from_shape_fn((3, 4), |(row, col)| (row * 4 + col + 1) as f64);
+    let backend = Svd::<f64>::new(Backend::Cuda).expect("Cuda backend initialization failed");
+    let output = backend
+        .compute(&a, SvdMode::Reduced)
+        .expect("reduced wide SVD failed");
+
+    assert_eq!(output.u.dim(), (3, 3));
+    assert_eq!(output.s.len(), 3);
+    assert_eq!(output.vt.dim(), (3, 4));
+    let reconstructed = reconstruct(&output.u, &output.s, &output.vt);
+    assert_matrix_close(&reconstructed, &a, EPSILON);
+}

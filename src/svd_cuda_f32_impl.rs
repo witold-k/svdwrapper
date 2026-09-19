@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright (c) 2026 Witold Kaminski
 
-use crate::cuda_common::{check_cuda, checked_bytes, DeviceBuffer};
+use crate::cuda_common::{check_cuda, checked_bytes, CurrentContextGuard, DeviceBuffer};
 use crate::svd::{SvdBackend, SvdMode, SvdOutput, SvdResult};
 use anyhow::{anyhow, Result};
 use cudarc::cusolver::sys::*;
@@ -28,10 +28,13 @@ impl CudaF32Svd {
                 "cuDevicePrimaryCtxRetain",
             )?;
 
-            if let Err(error) = check_cuda(cuCtxSetCurrent(ctx), "cuCtxSetCurrent") {
-                let _ = cuDevicePrimaryCtxRelease_v2(device);
-                return Err(error);
-            }
+            let _context = match CurrentContextGuard::activate(ctx) {
+                Ok(context) => context,
+                Err(error) => {
+                    let _ = cuDevicePrimaryCtxRelease_v2(device);
+                    return Err(error);
+                }
+            };
 
             let mut handle: cusolverDnHandle_t = std::ptr::null_mut();
             let status = cusolverDnCreate(&mut handle);
@@ -47,17 +50,16 @@ impl CudaF32Svd {
             })
         }
     }
-
-    fn make_current(&self) -> Result<()> {
-        unsafe { check_cuda(cuCtxSetCurrent(self.ctx), "cuCtxSetCurrent") }
-    }
 }
 
 impl Drop for CudaF32Svd {
     fn drop(&mut self) {
+        if let Ok(_context) = CurrentContextGuard::activate(self.ctx) {
+            unsafe {
+                let _ = cusolverDnDestroy(self.handle);
+            }
+        }
         unsafe {
-            let _ = cuCtxSetCurrent(self.ctx);
-            let _ = cusolverDnDestroy(self.handle);
             let _ = cuDevicePrimaryCtxRelease_v2(self.device);
         }
     }
@@ -69,7 +71,7 @@ impl SvdBackend<f32> for CudaF32Svd {
         a: &ArrayBase<impl Data<Elem = f32>, Ix2>,
         mode: SvdMode,
     ) -> SvdResult<f32> {
-        self.make_current()?;
+        let _context = CurrentContextGuard::activate(self.ctx)?;
 
         let original_m = a.nrows();
         let original_n = a.ncols();
@@ -110,10 +112,10 @@ impl SvdBackend<f32> for CudaF32Svd {
             .checked_mul(solver_n_usize)
             .ok_or_else(|| anyhow!("Vt element count overflow"))?;
 
-        let d_a = DeviceBuffer::new(checked_bytes::<f32>(elements_a, "A")?, "A", self.ctx)?;
-        let d_s = DeviceBuffer::new(checked_bytes::<f32>(k, "singular values")?, "singular values", self.ctx)?;
-        let d_u = DeviceBuffer::new(checked_bytes::<f32>(elements_u, "U")?, "U", self.ctx)?;
-        let d_vt = DeviceBuffer::new(checked_bytes::<f32>(elements_vt, "Vt")?, "Vt", self.ctx)?;
+        let d_a = DeviceBuffer::new(checked_bytes::<f32>(elements_a, "A")?, "A")?;
+        let d_s = DeviceBuffer::new(checked_bytes::<f32>(k, "singular values")?, "singular values")?;
+        let d_u = DeviceBuffer::new(checked_bytes::<f32>(elements_u, "U")?, "U")?;
+        let d_vt = DeviceBuffer::new(checked_bytes::<f32>(elements_vt, "Vt")?, "Vt")?;
         d_a.copy_from(&a_col, "A")?;
 
         let mut lwork = 0;
@@ -129,13 +131,11 @@ impl SvdBackend<f32> for CudaF32Svd {
 
         let d_work = DeviceBuffer::new(
             checked_bytes::<f32>(lwork as usize, "cuSOLVER workspace")?,
-            "cuSOLVER workspace",
-            self.ctx,
+            "cuSOLVER workspace"
         )?;
         let d_info = DeviceBuffer::new(
             checked_bytes::<i32>(1, "cuSOLVER devInfo")?,
-            "cuSOLVER devInfo",
-            self.ctx,
+            "cuSOLVER devInfo"
         )?;
 
         let status = unsafe {

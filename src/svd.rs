@@ -28,9 +28,8 @@ pub type SvdResult<T> = Result<SvdOutput<T>, anyhow::Error>;
 
 /// A unified abstraction trait that every underlying mathematical hardware backend must implement.
 ///
-/// This trait ensures cross-platform API symmetry. Whether computing on a local CPU thread via LAPACK
-/// or streaming matrices down to a graphics card accelerator using cuSOLVER or OpenCL kernels, the
-/// execution signature and shape output invariants remain entirely identical.
+/// This trait ensures API symmetry across the available numerical backends. The execution
+/// signature and output-shape invariants remain identical regardless of the implementation.
 pub(crate) trait SvdBackend<T> {
     /// Computes `A = U * diag(S) * Vt` using the requested output mode.
     fn compute_svd(

@@ -11,7 +11,6 @@ fn cpu() {
 #[cfg(feature = "cuda")]
 fn cuda() {
     use std::env;
-    // 2. Dynamic Discovery of CUDA installation path
     let cuda_home = env::var("CUDA_HOME")
     .or_else(|_| env::var("CUDA_PATH"))
     .unwrap_or_else(|_| "/usr/local/cuda".to_string());
@@ -21,13 +20,10 @@ fn cuda() {
     println!("cargo:rustc-link-lib=cuda");
     println!("cargo:rustc-link-search=native=/usr/lib");
     println!("cargo:rustc-link-search=native={}/lib64", cuda_home);
-
 }
 
 #[cfg(feature = "julia")]
 fn julia() {
-    // 1. User override
-    println!("## CHECKING");
     if let Ok(dir) = env::var("JLRS_JULIA_DIR") {
         println!("cargo:rustc-env=JLRS_JULIA_DIR={dir}");
         println!("cargo:rustc-link-search=native={dir}/lib");
@@ -35,7 +31,6 @@ fn julia() {
         return;
     }
 
-    // 2. Try juliaup default locations
     let home = env::var("HOME").unwrap();
     let candidates = [
         format!("{home}/.julia/juliaup"),
@@ -83,7 +78,6 @@ fn find_libjulia(dir: &Path) -> Option<PathBuf> {
 }
 
 fn main() {
-    // 1. Tell Cargo to rerun this script ONLY if build.rs or specific env vars change
     println!("cargo:rerun-if-changed=build.rs");
 
     #[cfg(any(feature = "cpu", feature = "julia"))]
