@@ -4,10 +4,16 @@
 #![cfg(feature = "cuda")]
 
 use ndarray::{array, s, Array2};
-use svdwrapper::svd::{mul_cpu_mat_vec_mat_f32, SvdBackend, SvdMode};
-use svdwrapper::svd_cuda_f32_impl::CudaF32Svd;
+use svdwrapper::{Backend, Svd, SvdMode};
 
 const EPSILON: f32 = 2.0e-4;
+
+fn reconstruct(u: &Array2<f32>, s: &ndarray::Array1<f32>, vt: &Array2<f32>) -> Array2<f32> {
+    let k = s.len();
+    let u = u.slice(ndarray::s![.., ..k]);
+    let u_s = &u * &s.view().insert_axis(ndarray::Axis(0));
+    u_s.dot(&vt.slice(ndarray::s![..k, ..]))
+}
 
 fn assert_matrix_close(actual: &Array2<f32>, expected: &Array2<f32>, epsilon: f32) {
     assert_eq!(actual.dim(), expected.dim());
@@ -27,14 +33,14 @@ fn assert_orthogonal(matrix: &Array2<f32>, epsilon: f32) {
 }
 
 fn assert_valid_svd(a: &Array2<f32>) {
-    let backend = CudaF32Svd::new().expect("CUDA backend initialization failed");
-    let (u, s, vt) = backend.compute_svd(a, SvdMode::Full).expect("CUDA SVD failed");
+    let backend = Svd::<f32>::new(Backend::Cuda).expect("CUDA backend initialization failed");
+    let (u, s, vt) = backend.compute(a, SvdMode::Full).expect("CUDA SVD failed");
 
     assert_eq!(u.dim(), (a.nrows(), a.nrows()));
     assert_eq!(s.len(), a.nrows().min(a.ncols()));
     assert_eq!(vt.dim(), (a.ncols(), a.ncols()));
 
-    let reconstructed = mul_cpu_mat_vec_mat_f32(&u, &s, &vt);
+    let reconstructed = reconstruct(&u, &s, &vt);
     assert_matrix_close(&reconstructed, a, EPSILON);
     assert_orthogonal(&u, EPSILON);
     assert_orthogonal(&vt, EPSILON);
@@ -107,31 +113,31 @@ fn non_contiguous_view() {
     let view = source.slice(s![.., ..;2]);
     assert!(!view.is_standard_layout());
 
-    let backend = CudaF32Svd::new().expect("CUDA backend initialization failed");
-    let (u, s, vt) = backend.compute_svd(&view, SvdMode::Full).expect("CUDA SVD failed");
-    let reconstructed = mul_cpu_mat_vec_mat_f32(&u, &s, &vt);
+    let backend = Svd::<f32>::new(Backend::Cuda).expect("CUDA backend initialization failed");
+    let (u, s, vt) = backend.compute(&view, SvdMode::Full).expect("CUDA SVD failed");
+    let reconstructed = reconstruct(&u, &s, &vt);
     assert_matrix_close(&reconstructed, &view.to_owned(), EPSILON);
 }
 
 #[test]
 fn empty_matrix_is_rejected() {
-    let backend = CudaF32Svd::new().expect("CUDA backend initialization failed");
+    let backend = Svd::<f32>::new(Backend::Cuda).expect("CUDA backend initialization failed");
     let empty = Array2::<f32>::zeros((0, 3));
-    let error = backend.compute_svd(&empty, SvdMode::Full).expect_err("empty input must fail");
+    let error = backend.compute(&empty, SvdMode::Full).expect_err("empty input must fail");
     assert!(error.to_string().contains("non-empty"));
 }
 
 #[test]
 fn reduced_mode_has_reduced_shapes() {
     let a = Array2::<f32>::from_shape_fn((4, 3), |(row, col)| (row * 3 + col + 1) as f32);
-    let backend = CudaF32Svd::new().expect("CUDA backend initialization failed");
+    let backend = Svd::<f32>::new(Backend::Cuda).expect("CUDA backend initialization failed");
     let (u, s, vt) = backend
-        .compute_svd(&a, SvdMode::Reduced)
+        .compute(&a, SvdMode::Reduced)
         .expect("reduced SVD failed");
 
     assert_eq!(u.dim(), (4, 3));
     assert_eq!(s.len(), 3);
     assert_eq!(vt.dim(), (3, 3));
-    let reconstructed = mul_cpu_mat_vec_mat_f32(&u, &s, &vt);
+    let reconstructed = reconstruct(&u, &s, &vt);
     assert_matrix_close(&reconstructed, &a, EPSILON);
 }

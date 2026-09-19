@@ -4,20 +4,27 @@
 #![cfg(feature = "julia")]
 
 use ndarray::{s, Array2, ArrayBase, Data, Ix2};
-use svdwrapper::{create_backend_f64, svd::{mul_cpu_mat_vec_mat_f64, SvdMode}, Backend};
+use svdwrapper::{Backend, Svd, SvdMode};
 
 const EPSILON: f64 = 1.0e-10;
 
+fn reconstruct(u: &Array2<f64>, s: &ndarray::Array1<f64>, vt: &Array2<f64>) -> Array2<f64> {
+    let k = s.len();
+    let u = u.slice(ndarray::s![.., ..k]);
+    let u_s = &u * &s.view().insert_axis(ndarray::Axis(0));
+    u_s.dot(&vt.slice(ndarray::s![..k, ..]))
+}
+
 fn assert_valid_svd(a: &ArrayBase<impl Data<Elem = f64>, Ix2>) {
-    let backend = create_backend_f64(Backend::JuliaF64);
-    let (u, singular_values, vt) = backend.compute_svd(a, SvdMode::Full).expect("Julia f64 SVD failed");
+    let backend = Svd::<f64>::new(Backend::Julia).expect("Julia backend initialization failed");
+    let (u, singular_values, vt) = backend.compute(a, SvdMode::Full).expect("Julia f64 SVD failed");
 
     let k = a.nrows().min(a.ncols());
     assert_eq!(u.dim(), (a.nrows(), a.nrows()));
     assert_eq!(singular_values.len(), k);
     assert_eq!(vt.dim(), (a.ncols(), a.ncols()));
 
-    let reconstructed = mul_cpu_mat_vec_mat_f64(&u, &singular_values, &vt);
+    let reconstructed = reconstruct(&u, &singular_values, &vt);
     for row in 0..a.nrows() {
         for col in 0..a.ncols() {
             let diff = (a[(row, col)] - reconstructed[(row, col)]).abs();
@@ -87,9 +94,9 @@ fn non_contiguous_view() {
 
 #[test]
 fn empty_matrix_is_rejected() {
-    let backend = create_backend_f64(Backend::JuliaF64);
+    let backend = Svd::<f64>::new(Backend::Julia).expect("Julia backend initialization failed");
     let a = Array2::<f64>::zeros((0, 3));
-    assert!(backend.compute_svd(&a, SvdMode::Full).is_err());
+    assert!(backend.compute(&a, SvdMode::Full).is_err());
 }
 
 #[test]
@@ -100,18 +107,18 @@ fn benchmark_repeated_svd() {
     const SIZE: usize = 512;
     const REPEATS: usize = 3;
 
-    let backend = create_backend_f64(Backend::JuliaF64);
+    let backend = Svd::<f64>::new(Backend::Julia).expect("Julia backend initialization failed");
     let a = Array2::from_shape_fn((SIZE, SIZE), |(row, col)| {
         (((row * 31 + col * 17) % 101) as f64 - 50.0) / 50.0
     });
 
     let first_start = Instant::now();
-    backend.compute_svd(&a, SvdMode::Full).expect("Julia f64 warm-up SVD failed");
+    backend.compute(&a, SvdMode::Full).expect("Julia f64 warm-up SVD failed");
     let first_elapsed = first_start.elapsed();
 
     let repeated_start = Instant::now();
     for _ in 0..REPEATS {
-        backend.compute_svd(&a, SvdMode::Full).expect("Julia f64 repeated SVD failed");
+        backend.compute(&a, SvdMode::Full).expect("Julia f64 repeated SVD failed");
     }
     let repeated_elapsed = repeated_start.elapsed();
 
@@ -124,15 +131,15 @@ fn benchmark_repeated_svd() {
 #[test]
 fn reduced_mode_has_reduced_shapes() {
     let a = Array2::<f64>::from_shape_fn((4, 3), |(row, col)| (row * 3 + col + 1) as f64);
-    let backend = create_backend_f64(Backend::JuliaF64);
+    let backend = Svd::<f64>::new(Backend::Julia).expect("Julia backend initialization failed");
     let (u, s, vt) = backend
-        .compute_svd(&a, SvdMode::Reduced)
+        .compute(&a, SvdMode::Reduced)
         .expect("reduced SVD failed");
 
     assert_eq!(u.dim(), (4, 3));
     assert_eq!(s.len(), 3);
     assert_eq!(vt.dim(), (3, 3));
-    let reconstructed = mul_cpu_mat_vec_mat_f64(&u, &s, &vt);
+    let reconstructed = reconstruct(&u, &s, &vt);
     for row in 0..a.nrows() {
         for col in 0..a.ncols() {
             assert!((a[(row, col)] - reconstructed[(row, col)]).abs() <= EPSILON);

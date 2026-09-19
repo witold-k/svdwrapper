@@ -8,7 +8,7 @@ use ndarray_rand::{rand_distr::Uniform, RandomExt};
 #[cfg(feature = "cpu")]
 use std::time::Instant;
 #[cfg(feature = "cpu")]
-use svdwrapper::{create_backend_f32, create_backend_f64, svd::SvdMode, Backend};
+use svdwrapper::{Backend, Svd, SvdMode};
 
 // Intentionally large to exercise the backend under a realistic stress-test workload.
 #[cfg(feature = "cpu")]
@@ -17,10 +17,10 @@ const SIZE: usize = 10_000;
 #[cfg(feature = "cpu")]
 fn run_f32() {
     let a = Array2::<f32>::random((SIZE, SIZE), Uniform::new(1.0, 10.0).unwrap());
-    let backend = create_backend_f32(Backend::CpuF32);
+    let backend = Svd::<f32>::new(Backend::Cpu).expect("backend initialization failed");
 
     let start = Instant::now();
-    let (u, s, vt) = backend.compute_svd(&a, SvdMode::Full).expect("cpu f32 SVD failed");
+    let (u, s, vt) = backend.compute(&a, SvdMode::Full).expect("cpu f32 SVD failed");
     let elapsed = start.elapsed();
 
     println!("cpu f32: U={:?}, S={}, Vt={:?}, elapsed={elapsed:?}", u.dim(), s.len(), vt.dim());
@@ -29,10 +29,10 @@ fn run_f32() {
 #[cfg(feature = "cpu")]
 fn run_f64() {
     let a = Array2::<f64>::random((SIZE, SIZE), Uniform::new(1.0, 10.0).unwrap());
-    let backend = create_backend_f64(Backend::CpuF64);
+    let backend = Svd::<f64>::new(Backend::Cpu).expect("backend initialization failed");
 
     let start = Instant::now();
-    let (u, s, vt) = backend.compute_svd(&a, SvdMode::Full).expect("cpu f64 SVD failed");
+    let (u, s, vt) = backend.compute(&a, SvdMode::Full).expect("cpu f64 SVD failed");
     let elapsed = start.elapsed();
 
     println!("cpu f64: U={:?}, S={}, Vt={:?}, elapsed={elapsed:?}", u.dim(), s.len(), vt.dim());

@@ -4,9 +4,16 @@
 #![cfg(feature = "cpu")]
 
 use ndarray::{array, s, Array2, ArrayBase, Data, Ix2};
-use svdwrapper::{create_backend_f32, svd::{mul_cpu_mat_vec_mat_f32, SvdMode}, Backend};
+use svdwrapper::{Backend, Svd, SvdMode};
 
 const EPSILON: f32 = 2.0e-4;
+
+fn reconstruct(u: &Array2<f32>, s: &ndarray::Array1<f32>, vt: &Array2<f32>) -> Array2<f32> {
+    let k = s.len();
+    let u = u.slice(ndarray::s![.., ..k]);
+    let u_s = &u * &s.view().insert_axis(ndarray::Axis(0));
+    u_s.dot(&vt.slice(ndarray::s![..k, ..]))
+}
 
 fn assert_matrix_close(actual: &Array2<f32>, expected: &Array2<f32>) {
     assert_eq!(actual.dim(), expected.dim());
@@ -17,14 +24,14 @@ fn assert_matrix_close(actual: &Array2<f32>, expected: &Array2<f32>) {
 }
 
 fn assert_valid_svd(a: &ArrayBase<impl Data<Elem = f32>, Ix2>) {
-    let backend = create_backend_f32(Backend::CpuF32);
-    let (u, singular_values, vt) = backend.compute_svd(a, SvdMode::Full).expect("CPU f32 SVD failed");
+    let backend = Svd::<f32>::new(Backend::Cpu).expect("backend initialization failed");
+    let (u, singular_values, vt) = backend.compute(a, SvdMode::Full).expect("CPU f32 SVD failed");
 
     assert_eq!(u.dim(), (a.nrows(), a.nrows()));
     assert_eq!(singular_values.len(), a.nrows().min(a.ncols()));
     assert_eq!(vt.dim(), (a.ncols(), a.ncols()));
 
-    let reconstructed = mul_cpu_mat_vec_mat_f32(&u, &singular_values, &vt);
+    let reconstructed = reconstruct(&u, &singular_values, &vt);
     assert_matrix_close(&reconstructed, &a.to_owned());
 
     let utu = u.t().dot(&u);
@@ -81,9 +88,9 @@ fn non_contiguous_view() {
 
 #[test]
 fn empty_matrix_is_rejected() {
-    let backend = create_backend_f32(Backend::CpuF32);
+    let backend = Svd::<f32>::new(Backend::Cpu).expect("backend initialization failed");
     let a = Array2::<f32>::zeros((0, 3));
-    assert!(backend.compute_svd(&a, SvdMode::Full).is_err());
+    assert!(backend.compute(&a, SvdMode::Full).is_err());
 }
 
 #[test]
@@ -95,10 +102,10 @@ fn benchmark_cpu_large_matrix() {
     const SIZE: usize = 10_000;
 
     let a = Array2::<f32>::random((SIZE, SIZE), Uniform::new(1.0, 10.0).unwrap());
-    let backend = create_backend_f32(Backend::CpuF32);
+    let backend = Svd::<f32>::new(Backend::Cpu).expect("backend initialization failed");
 
     let start = Instant::now();
-    let (u, singular_values, vt) = backend.compute_svd(&a, SvdMode::Full).expect("CPU f32 stress-test SVD failed");
+    let (u, singular_values, vt) = backend.compute(&a, SvdMode::Full).expect("CPU f32 stress-test SVD failed");
     let elapsed = start.elapsed();
 
     println!("CPU f32 {SIZE}x{SIZE}: U={:?}, S={}, Vt={:?}, elapsed={elapsed:?}", u.dim(), singular_values.len(), vt.dim());
@@ -107,14 +114,14 @@ fn benchmark_cpu_large_matrix() {
 #[test]
 fn reduced_mode_has_reduced_shapes() {
     let a = Array2::<f32>::from_shape_fn((4, 3), |(row, col)| (row * 3 + col + 1) as f32);
-    let backend = create_backend_f32(Backend::CpuF32);
+    let backend = Svd::<f32>::new(Backend::Cpu).expect("backend initialization failed");
     let (u, s, vt) = backend
-        .compute_svd(&a, SvdMode::Reduced)
+        .compute(&a, SvdMode::Reduced)
         .expect("reduced SVD failed");
 
     assert_eq!(u.dim(), (4, 3));
     assert_eq!(s.len(), 3);
     assert_eq!(vt.dim(), (3, 3));
-    let reconstructed = mul_cpu_mat_vec_mat_f32(&u, &s, &vt);
+    let reconstructed = reconstruct(&u, &s, &vt);
     assert_matrix_close(&reconstructed, &a);
 }

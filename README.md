@@ -80,7 +80,7 @@ svdwrapper = { version = "0.1.0", features = ["cpu", "cuda"] }
 
 ```rust
 use ndarray::Array2;
-use svdwrapper::{create_backend_f64, svd::SvdMode, Backend};
+use svdwrapper::{Backend, Svd, SvdMode};
 
 fn main() -> anyhow::Result<()> {
     let a = Array2::from_shape_vec(
@@ -93,8 +93,8 @@ fn main() -> anyhow::Result<()> {
         ],
     )?;
 
-    let backend = create_backend_f64(Backend::CpuF64);
-    let (u, s, vt) = backend.compute_svd(&a, SvdMode::Full)?;
+    let svd = Svd::<f64>::new(Backend::Cpu)?;
+    let (u, s, vt) = svd.compute(&a, SvdMode::Full)?;
 
     println!("U:  {:?}", u.shape());
     println!("S:  {:?}", s.shape());
@@ -104,21 +104,20 @@ fn main() -> anyhow::Result<()> {
 }
 ```
 
-For an `m x n` matrix, `S` contains `min(m, n)` singular values. `compute_svd`
+For an `m x n` matrix, `S` contains `min(m, n)` singular values. `compute`
 requires an explicit `SvdMode::Full` or `SvdMode::Reduced`; reduced mode returns
-`U` as `m x k` and `Vt` as `k x n`, where `k = min(m, n)`. The crate provides
-helper functions in `svdwrapper::svd` for reconstructing matrices from `U`, `S`
-and `Vt`.
+`U` as `m x k` and `Vt` as `k x n`, where `k = min(m, n)`. The returned factors
+can be used directly to reconstruct the input matrix.
 
 ### CUDA
 
 The CUDA backend currently supports both `f32` and `f64`:
 
 ```rust
-use svdwrapper::{try_create_backend_f32, svd::SvdMode, Backend};
+use svdwrapper::{Backend, Svd, SvdMode};
 
-let backend = try_create_backend_f32(Backend::CudaF32)?;
-let (u, s, vt) = backend.compute_svd(&a, SvdMode::Full)?;
+let svd = Svd::<f32>::new(Backend::Cuda)?;
+let (u, s, vt) = svd.compute(&a, SvdMode::Full)?;
 ```
 
 A working NVIDIA driver and CUDA toolkit are required. The build script looks
