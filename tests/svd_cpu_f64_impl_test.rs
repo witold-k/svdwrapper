@@ -4,7 +4,7 @@
 #![cfg(feature = "cpu")]
 
 use ndarray::{array, s, Array2, ArrayBase, Data, Ix2};
-use svdwrapper::{create_backend_f64, svd::mul_cpu_mat_vec_mat_f64, Backend};
+use svdwrapper::{create_backend_f64, svd::{mul_cpu_mat_vec_mat_f64, SvdMode}, Backend};
 
 const EPSILON: f64 = 1.0e-10;
 
@@ -18,7 +18,7 @@ fn assert_matrix_close(actual: &Array2<f64>, expected: &Array2<f64>) {
 
 fn assert_valid_svd(a: &ArrayBase<impl Data<Elem = f64>, Ix2>) {
     let backend = create_backend_f64(Backend::CpuF64);
-    let (u, singular_values, vt) = backend.compute_svd(a).expect("CPU f64 SVD failed");
+    let (u, singular_values, vt) = backend.compute_svd(a, SvdMode::Full).expect("CPU f64 SVD failed");
 
     assert_eq!(u.dim(), (a.nrows(), a.nrows()));
     assert_eq!(singular_values.len(), a.nrows().min(a.ncols()));
@@ -83,7 +83,7 @@ fn non_contiguous_view() {
 fn empty_matrix_is_rejected() {
     let backend = create_backend_f64(Backend::CpuF64);
     let a = Array2::<f64>::zeros((0, 3));
-    assert!(backend.compute_svd(&a).is_err());
+    assert!(backend.compute_svd(&a, SvdMode::Full).is_err());
 }
 
 #[test]
@@ -98,8 +98,23 @@ fn benchmark_cpu_large_matrix() {
     let backend = create_backend_f64(Backend::CpuF64);
 
     let start = Instant::now();
-    let (u, singular_values, vt) = backend.compute_svd(&a).expect("CPU f64 stress-test SVD failed");
+    let (u, singular_values, vt) = backend.compute_svd(&a, SvdMode::Full).expect("CPU f64 stress-test SVD failed");
     let elapsed = start.elapsed();
 
     println!("CPU f64 {SIZE}x{SIZE}: U={:?}, S={}, Vt={:?}, elapsed={elapsed:?}", u.dim(), singular_values.len(), vt.dim());
+}
+
+#[test]
+fn reduced_mode_has_reduced_shapes() {
+    let a = Array2::<f64>::from_shape_fn((4, 3), |(row, col)| (row * 3 + col + 1) as f64);
+    let backend = create_backend_f64(Backend::CpuF64);
+    let (u, s, vt) = backend
+        .compute_svd(&a, SvdMode::Reduced)
+        .expect("reduced SVD failed");
+
+    assert_eq!(u.dim(), (4, 3));
+    assert_eq!(s.len(), 3);
+    assert_eq!(vt.dim(), (3, 3));
+    let reconstructed = mul_cpu_mat_vec_mat_f64(&u, &s, &vt);
+    assert_matrix_close(&reconstructed, &a);
 }

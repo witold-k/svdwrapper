@@ -7,8 +7,8 @@
 //! of two-dimensional matrices. This crate enables seamless runtime switching between CPU-based
 //! LAPACK routines and GPU-accelerated backends (CUDA/cuSOLVER and OpenCL) via Cargo features.
 //!
-//! All mathematical evaluations yield a standardized `(U, Sigma, Vt)` tuple,
-//! where `Sigma` is cross-platform harmonized as a fully populated 2D diagonal matrix.
+//! All mathematical evaluations yield a standardized `(U, S, Vt)` tuple, where `S`
+//! is a one-dimensional singular-value vector. Full and reduced output modes are supported.
 
 pub mod svd;
 
@@ -50,7 +50,7 @@ use ndarray::{Array1, Array2, ArrayBase, Data, Ix2};
     feature = "julia",
     feature = "opencl"
 ))]
-use crate::svd::SvdBackend;
+use crate::svd::{SvdBackend, SvdMode};
 
 #[cfg(feature = "cpu")]
 use crate::svd_cpu_f32_impl::CpuF32Svd;
@@ -64,9 +64,6 @@ use crate::svd_cuda_f64_impl::CudaF64Svd;
 use crate::svd_julia_f32_impl::JuliaF32Svd;
 #[cfg(feature = "julia")]
 use crate::svd_julia_f64_impl::JuliaF64Svd;
-#[cfg(feature = "opencl")]
-use crate::svd_opencl_impl::OpenClSvd;
-
 /// Supported execution backends for numerical SVD processing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Backend {
@@ -86,10 +83,6 @@ pub enum Backend {
     JuliaF32,
     /// use julia as middleware
     JuliaF64,
-}
-
-pub trait Precision: Sized {
-    fn create_manager(backend: Backend) -> SvdManager<Self>;
 }
 
 /// The central resource and state manager for calculations on the chosen hardware pipeline.
@@ -129,7 +122,7 @@ impl SvdManager<f64> {
     ///
     /// # Returns
     ///
-    /// Returns a `Result` wrapping the initialized `(U, Sigma, Vt)` tuple on success:
+    /// Returns a `Result` wrapping the initialized `(U, S, Vt)` tuple on success:
     /// * `U` - The left orthogonal singular vector matrix ($M \times M$).
     /// * `Sigma` - The fully populated diagonal matrix containing the singular values ($M \times N$).
     /// * `Vt` - The transposed right orthogonal singular vector matrix ($N \times N$).
@@ -144,16 +137,17 @@ impl SvdManager<f64> {
     pub fn compute_svd(
         &self,
         a: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+        mode: SvdMode,
     ) -> anyhow::Result<(Array2<f64>, Array1<f64>, Array2<f64>)> {
         match self {
             #[cfg(feature = "cpu")]
-            Self::CpuF64(b) => b.compute_svd(a).map_err(|e| anyhow::anyhow!(e)),
+            Self::CpuF64(b) => b.compute_svd(a, mode).map_err(|e| anyhow::anyhow!(e)),
             #[cfg(feature = "cuda")]
-            Self::CudaF64(b) => b.compute_svd(a),
+            Self::CudaF64(b) => b.compute_svd(a, mode),
             #[cfg(feature = "opencl")]
-            Self::OpenF64Cl(b) => b.compute_svd(a),
+            Self::OpenClF64(b) => b.compute_svd(a, mode),
             #[cfg(feature = "julia")]
-            Self::JuliaF64(b) => b.compute_svd(a),
+            Self::JuliaF64(b) => b.compute_svd(a, mode),
             _ => anyhow::bail!("The requested backend path is either not compiled or inactive for f64 execution."),
         }
     }
@@ -171,7 +165,7 @@ impl SvdManager<f32> {
     ///
     /// # Returns
     ///
-    /// Returns a `Result` wrapping the initialized `(U, Sigma, Vt)` tuple on success:
+    /// Returns a `Result` wrapping the initialized `(U, S, Vt)` tuple on success:
     /// * `U` - The left orthogonal singular vector matrix ($M \times M$).
     /// * `Sigma` - The fully populated diagonal matrix containing the singular values ($M \times N$).
     /// * `Vt` - The transposed right orthogonal singular vector matrix ($N \times N$).
@@ -186,16 +180,17 @@ impl SvdManager<f32> {
     pub fn compute_svd(
         &self,
         a: &ArrayBase<impl Data<Elem = f32>, Ix2>,
+        mode: SvdMode,
     ) -> anyhow::Result<(Array2<f32>, Array1<f32>, Array2<f32>)> {
         match self {
             #[cfg(feature = "cpu")]
-            Self::CpuF32(b) => b.compute_svd(a).map_err(|e| anyhow::anyhow!(e)),
+            Self::CpuF32(b) => b.compute_svd(a, mode).map_err(|e| anyhow::anyhow!(e)),
             #[cfg(feature = "cuda")]
-            Self::CudaF32(b) => b.compute_svd(a),
+            Self::CudaF32(b) => b.compute_svd(a, mode),
             #[cfg(feature = "opencl")]
-            Self::OpenF32Cl(b) => b.compute_svd(a),
+            Self::OpenClF32(b) => b.compute_svd(a, mode),
             #[cfg(feature = "julia")]
-            Self::JuliaF32(b) => b.compute_svd(a),
+            Self::JuliaF32(b) => b.compute_svd(a, mode),
             _ => anyhow::bail!("The requested backend path is either not compiled or inactive for f32 execution."),
         }
     }

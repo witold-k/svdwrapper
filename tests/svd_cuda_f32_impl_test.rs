@@ -4,7 +4,7 @@
 #![cfg(feature = "cuda")]
 
 use ndarray::{array, s, Array2};
-use svdwrapper::svd::{mul_cpu_mat_vec_mat_f32, SvdBackend};
+use svdwrapper::svd::{mul_cpu_mat_vec_mat_f32, SvdBackend, SvdMode};
 use svdwrapper::svd_cuda_f32_impl::CudaF32Svd;
 
 const EPSILON: f32 = 2.0e-4;
@@ -28,7 +28,7 @@ fn assert_orthogonal(matrix: &Array2<f32>, epsilon: f32) {
 
 fn assert_valid_svd(a: &Array2<f32>) {
     let backend = CudaF32Svd::new().expect("CUDA backend initialization failed");
-    let (u, s, vt) = backend.compute_svd(a).expect("CUDA SVD failed");
+    let (u, s, vt) = backend.compute_svd(a, SvdMode::Full).expect("CUDA SVD failed");
 
     assert_eq!(u.dim(), (a.nrows(), a.nrows()));
     assert_eq!(s.len(), a.nrows().min(a.ncols()));
@@ -108,7 +108,7 @@ fn non_contiguous_view() {
     assert!(!view.is_standard_layout());
 
     let backend = CudaF32Svd::new().expect("CUDA backend initialization failed");
-    let (u, s, vt) = backend.compute_svd(&view).expect("CUDA SVD failed");
+    let (u, s, vt) = backend.compute_svd(&view, SvdMode::Full).expect("CUDA SVD failed");
     let reconstructed = mul_cpu_mat_vec_mat_f32(&u, &s, &vt);
     assert_matrix_close(&reconstructed, &view.to_owned(), EPSILON);
 }
@@ -117,6 +117,21 @@ fn non_contiguous_view() {
 fn empty_matrix_is_rejected() {
     let backend = CudaF32Svd::new().expect("CUDA backend initialization failed");
     let empty = Array2::<f32>::zeros((0, 3));
-    let error = backend.compute_svd(&empty).expect_err("empty input must fail");
+    let error = backend.compute_svd(&empty, SvdMode::Full).expect_err("empty input must fail");
     assert!(error.to_string().contains("non-empty"));
+}
+
+#[test]
+fn reduced_mode_has_reduced_shapes() {
+    let a = Array2::<f32>::from_shape_fn((4, 3), |(row, col)| (row * 3 + col + 1) as f32);
+    let backend = CudaF32Svd::new().expect("CUDA backend initialization failed");
+    let (u, s, vt) = backend
+        .compute_svd(&a, SvdMode::Reduced)
+        .expect("reduced SVD failed");
+
+    assert_eq!(u.dim(), (4, 3));
+    assert_eq!(s.len(), 3);
+    assert_eq!(vt.dim(), (3, 3));
+    let reconstructed = mul_cpu_mat_vec_mat_f32(&u, &s, &vt);
+    assert_matrix_close(&reconstructed, &a, EPSILON);
 }

@@ -2,7 +2,7 @@
 // Copyright (c) 2026 Witold Kaminski
 
 use crate::cuda_common::{check_cuda, checked_bytes, DeviceBuffer};
-use crate::svd::{SvdBackend, SvdResult};
+use crate::svd::{SvdBackend, SvdMode, SvdResult};
 use anyhow::{anyhow, Result};
 use cudarc::cusolver::sys::*;
 use cudarc::driver::sys::*;
@@ -67,6 +67,7 @@ impl SvdBackend<f64> for CudaF64Svd {
     fn compute_svd(
         &self,
         a: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+        mode: SvdMode,
     ) -> SvdResult<f64> {
         self.make_current()?;
 
@@ -86,7 +87,7 @@ impl SvdBackend<f64> for CudaF64Svd {
         let k = solver_n_usize;
 
         // gesvd only supports m >= n. For a wide input, decompose A^T and map
-        // the full singular-vector matrices back to the SVD of A.
+        // the singular-vector matrices back to the SVD of A.
         let elements_a = solver_m_usize
             .checked_mul(solver_n_usize)
             .ok_or_else(|| anyhow!("matrix element count overflow"))?;
@@ -98,10 +99,14 @@ impl SvdBackend<f64> for CudaF64Svd {
             }
         }
 
+        let (solver_u_cols, solver_vt_rows, job) = match mode {
+            SvdMode::Full => (solver_m_usize, solver_n_usize, b'A' as i8),
+            SvdMode::Reduced => (k, k, b'S' as i8),
+        };
         let elements_u = solver_m_usize
-            .checked_mul(solver_m_usize)
+            .checked_mul(solver_u_cols)
             .ok_or_else(|| anyhow!("U element count overflow"))?;
-        let elements_vt = solver_n_usize
+        let elements_vt = solver_vt_rows
             .checked_mul(solver_n_usize)
             .ok_or_else(|| anyhow!("Vt element count overflow"))?;
 
@@ -136,8 +141,8 @@ impl SvdBackend<f64> for CudaF64Svd {
         let status = unsafe {
             cusolverDnDgesvd(
                 self.handle,
-                b'A' as i8,
-                b'A' as i8,
+                job,
+                job,
                 m,
                 n,
                 d_a.ptr() as *mut f64,
@@ -181,10 +186,10 @@ impl SvdBackend<f64> for CudaF64Svd {
         d_u.copy_to(&mut u_col, "U")?;
         d_vt.copy_to(&mut vt_col, "Vt")?;
 
-        let solver_u = Array2::from_shape_fn((solver_m_usize, solver_m_usize), |(r, c)| {
+        let solver_u = Array2::from_shape_fn((solver_m_usize, solver_u_cols), |(r, c)| {
             u_col[c * solver_m_usize + r]
         });
-        let solver_vt = Array2::from_shape_fn((solver_n_usize, solver_n_usize), |(r, c)| {
+        let solver_vt = Array2::from_shape_fn((solver_vt_rows, solver_n_usize), |(r, c)| {
             vt_col[c * solver_n_usize + r]
         });
 

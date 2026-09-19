@@ -2,7 +2,7 @@
 // Copyright (c) 2026 Witold Kaminski
 
 use crate::julia_common;
-use crate::svd::{SvdBackend, SvdResult};
+use crate::svd::{SvdBackend, SvdMode, SvdResult};
 use anyhow::{anyhow, Result};
 use jlrs::data::managed::array::dimensions::Dims;
 use jlrs::data::managed::array::TypedArray;
@@ -16,6 +16,7 @@ fn run_julia_svd(
     mut frame: GcFrame<'_>,
     matrix_data: Vec<f32>,
     shape: [usize; 2],
+    mode: SvdMode,
 ) -> Result<(Array2<f32>, Array1<f32>, Array2<f32>)> {
     let dims = &[shape[0], shape[1]];
     let julia_matrix = TypedArray::<f32>::from_vec(&mut frame, matrix_data, dims)
@@ -27,7 +28,8 @@ fn run_julia_svd(
         .map_err(|e| anyhow!("failed to resolve Julia function svd_cpu_f32: {e}"))?
         .as_value();
 
-    let result = unsafe { func.call(&mut frame, [julia_matrix.as_value()]) }.map_err(|e| {
+    let full = Value::new(&mut frame, matches!(mode, SvdMode::Full));
+    let result = unsafe { func.call(&mut frame, [julia_matrix.as_value(), full]) }.map_err(|e| {
         anyhow!(
             "Julia exception calling svd_cpu_f32: {}",
             e.display_string_or("<unknown Julia error>")
@@ -59,7 +61,7 @@ fn run_julia_svd(
 }
 
 impl SvdBackend<f32> for JuliaF32Svd {
-    fn compute_svd(&self, a: &ArrayBase<impl Data<Elem = f32>, Ix2>) -> SvdResult<f32> {
+    fn compute_svd(&self, a: &ArrayBase<impl Data<Elem = f32>, Ix2>, mode: SvdMode) -> SvdResult<f32> {
         let shape = [a.nrows(), a.ncols()];
         if shape[0] == 0 || shape[1] == 0 {
             return Err(anyhow!("SVD requires a non-empty matrix"));
@@ -72,6 +74,6 @@ impl SvdBackend<f32> for JuliaF32Svd {
             }
         }
 
-        julia_common::blocking_task(move |frame| run_julia_svd(frame, raw_data, shape))
+        julia_common::blocking_task(move |frame| run_julia_svd(frame, raw_data, shape, mode))
     }
 }

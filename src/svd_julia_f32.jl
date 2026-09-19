@@ -3,7 +3,7 @@
 
 using LinearAlgebra
 
-function svd_cpu_f32(a::Array{Float32,2})
-    f = svd(a)
+function svd_cpu_f32(a::Array{Float32,2}, full::Bool)
+    f = svd(a; full=full)
     return (f.U, f.S, f.Vt)
 end

@@ -1,6 +1,7 @@
 # svdwrapper
 
-`svdwrapper` is an experimental Rust abstraction for computing dense singular value decompositions (SVD) through interchangeable numerical backends.
+`svdwrapper` is an experimental Rust abstraction for computing dense singular
+value decompositions (SVD) through interchangeable numerical backends.
 
 The intended public model is simple:
 
@@ -8,35 +9,44 @@ The intended public model is simple:
 A = U * diag(S) * Vt
 ```
 
-Backends expose the same high-level Rust API and return `(U, S, Vt)`, with the singular values stored as a vector.
+Backends expose the same high-level Rust API and return `(U, S, Vt)`, with the
+singular values stored as a vector.
 
-The project is under active development. CPU, CUDA and Julia paths already exist; the immediate work is to make those paths consistent, well-tested and documented. OpenCL and ROCm are deliberately lower-priority future work.
+The project is under active development. CPU, CUDA and Julia paths already
+exist; the immediate work is to make those paths consistent, well-tested and
+documented. OpenCL and ROCm are deliberately lower-priority future work.
 
 ## Current status
 
 | Backend | Precision | Status |
 | --- | --- | --- |
-| CPU / LAPACK | f32, f64 | Implemented; needs broader correctness tests and cleanup |
-| NVIDIA CUDA / cuSOLVER | f32, f64 | Implemented; needs stronger error handling, cleanup and broader tests |
-| Julia | f32, f64 | Implemented; needs cleanup, documentation and broader tests |
+| CPU / LAPACK | f32, f64 | Implemented and covered by correctness tests |
+| NVIDIA CUDA / cuSOLVER | f32, f64 | Implemented with checked CUDA/cuSOLVER error handling and correctness tests |
+| Julia | f32, f64 | Implemented with a shared runtime and correctness tests |
 | OpenCL | f32, f64 | Experimental/incomplete; not part of the near-term stabilization target |
 | AMD ROCm | - | Placeholder only; future work |
 
-This is not yet a production-ready crate. APIs and backend internals may still change while the core implementation is being consolidated.
+This is not yet a production-ready crate. APIs and backend internals may still
+change while the core implementation is being consolidated.
 
 ## Design goals
 
-The main goal is a small backend-independent interface for dense SVD while keeping backend-specific code isolated.
+The main goal is a small backend-independent interface for dense SVD while
+keeping backend-specific code isolated.
 
 In particular:
 
-- CPU, CUDA and Julia implementations should expose equivalent semantics.
+- CPU, CUDA and Julia implementations expose equivalent full and reduced SVD
+  semantics.
 - Both `f32` and `f64` should be supported where the backend permits it.
-- Singular values are represented as a one-dimensional vector rather than an expanded diagonal matrix.
-- Rectangular matrices must be handled correctly for both `m > n` and `m < n`.
+- Singular values are represented as a one-dimensional vector rather than an
+  expanded diagonal matrix.
+- Rectangular matrices must be handled correctly for both `m > n` and
+  `m < n`.
 - Backend resources should follow Rust ownership/RAII rules.
-- Errors from numerical libraries, CUDA and runtime setup should be propagated rather than hidden behind panics where practical.
-- Consistent test layou - tests live under `tests/`, mirror the relative
+- Errors from numerical libraries, CUDA and runtime setup should be propagated
+  rather than hidden behind panics where practical.
+- Consistent test layout - tests live under `tests/`, mirror the relative
   `src/` hierarchy, and use the source filename with a `_test.rs` suffix.
 
 ## Cargo features
@@ -70,7 +80,7 @@ svdwrapper = { version = "0.1.0", features = ["cpu", "cuda"] }
 
 ```rust
 use ndarray::Array2;
-use svdwrapper::{create_backend_f64, Backend};
+use svdwrapper::{create_backend_f64, svd::SvdMode, Backend};
 
 fn main() -> anyhow::Result<()> {
     let a = Array2::from_shape_vec(
@@ -84,7 +94,7 @@ fn main() -> anyhow::Result<()> {
     )?;
 
     let backend = create_backend_f64(Backend::CpuF64);
-    let (u, s, vt) = backend.compute_svd(&a)?;
+    let (u, s, vt) = backend.compute_svd(&a, SvdMode::Full)?;
 
     println!("U:  {:?}", u.shape());
     println!("S:  {:?}", s.shape());
@@ -94,32 +104,39 @@ fn main() -> anyhow::Result<()> {
 }
 ```
 
-For an `m x n` matrix, `S` contains `min(m, n)` singular values. The crate provides helper functions in `svdwrapper::svd` for reconstructing matrices from `U`, `S` and `Vt`.
+For an `m x n` matrix, `S` contains `min(m, n)` singular values. `compute_svd`
+requires an explicit `SvdMode::Full` or `SvdMode::Reduced`; reduced mode returns
+`U` as `m x k` and `Vt` as `k x n`, where `k = min(m, n)`. The crate provides
+helper functions in `svdwrapper::svd` for reconstructing matrices from `U`, `S`
+and `Vt`.
 
 ### CUDA
 
 The CUDA backend currently supports both `f32` and `f64`:
 
 ```rust
-use svdwrapper::{try_create_backend_f32, Backend};
+use svdwrapper::{try_create_backend_f32, svd::SvdMode, Backend};
 
 let backend = try_create_backend_f32(Backend::CudaF32)?;
-let (u, s, vt) = backend.compute_svd(&a)?;
+let (u, s, vt) = backend.compute_svd(&a, SvdMode::Full)?;
 ```
 
-A working NVIDIA driver and CUDA toolkit are required. The build script looks for `CUDA_HOME` or `CUDA_PATH` and otherwise falls back to `/usr/local/cuda`.
+A working NVIDIA driver and CUDA toolkit are required. The build script looks
+for `CUDA_HOME` or `CUDA_PATH` and otherwise falls back to `/usr/local/cuda`.
 
 ## System dependencies
 
 ### CPU
 
-The CPU path uses `ndarray-linalg` and a system BLAS/LAPACK implementation. On Debian/Ubuntu, OpenBLAS can be installed with:
+The CPU path uses `ndarray-linalg` and a system BLAS/LAPACK implementation. On
+Debian/Ubuntu, OpenBLAS can be installed with:
 
 ```bash
 sudo apt install libopenblas-dev gfortran pkg-config
 ```
 
-Exact requirements can vary with the BLAS/LAPACK configuration used by `ndarray-linalg`.
+Exact requirements can vary with the BLAS/LAPACK configuration used by
+`ndarray-linalg`.
 
 ### CUDA
 
@@ -138,7 +155,8 @@ export PATH="$CUDA_HOME/bin:$PATH"
 
 ### Julia
 
-The Julia backend uses `jlrs`. The build script can discover common Juliaup locations, or the Julia installation can be supplied explicitly:
+The Julia backend uses `jlrs`. The build script can discover common Juliaup
+locations, or the Julia installation can be supplied explicitly:
 
 ```bash
 export JLRS_JULIA_DIR=/path/to/julia
@@ -154,43 +172,34 @@ cargo test --features cuda
 cargo test --features julia
 ```
 
-Some large-matrix timing tests are marked `#[ignore]` and are intended for explicit local runs rather than normal correctness testing.
+Some large-matrix timing tests are marked `#[ignore]` and are intended for
+explicit local runs rather than normal correctness testing.
 
-The current test suite already checks basic reconstruction for rectangular matrices. It still needs to be expanded before the crate can be considered mature.
+The current test suite covers reconstruction, rectangular matrices,
+rank-deficient and ill-conditioned inputs, non-contiguous views, empty-input
+rejection, and full/reduced output semantics across the implemented backends.
 
 ## Near-term roadmap
 
-The next development phase is focused on completing and hardening the already useful backends rather than adding more hardware targets.
-
-Planned near-term work:
-
-1. Make the public documentation and implementation agree on the `(U, S, Vt)` representation.
-2. Remove stale comments and backend naming inconsistencies.
-3. Improve CUDA initialization, allocation and solver error handling.
-4. Reduce avoidable panics in backend construction and return useful errors instead.
-5. Expand correctness coverage for:
-   - `m > n`, `m < n`, and square matrices,
-   - rank-deficient matrices,
-   - zero and identity matrices,
-   - ill-conditioned inputs,
-   - non-contiguous ndarray views,
-   - orthogonality of `U` and `V`,
-   - reconstruction `A ≈ U * diag(S) * Vt`,
-   - non-negative, descending singular values.
-6. Bring the Julia path to the same API and testing standard as CPU and CUDA.
-7. Add focused documentation and examples once the interfaces stop moving.
+The current stabilization focus is API cleanup, documentation and validating
+the implemented backends against real workloads. Full and reduced SVD modes are
+supported consistently by CPU, CUDA and Julia.
 
 ## Later work
 
 OpenCL and ROCm are intentionally not near-term goals.
 
-The existing OpenCL/MAGMA code should currently be treated as experimental scaffolding rather than a supported backend. It can be revisited after CPU, CUDA and Julia are consistent and well-tested.
+The existing OpenCL/MAGMA code should currently be treated as experimental
+scaffolding rather than a supported backend. It can be revisited after CPU,
+CUDA and Julia are consistent and well-tested.
 
-ROCm is a future backend idea only. No working ROCm implementation exists at present.
+ROCm is a future backend idea only. No working ROCm implementation exists at
+present.
 
 ## Scope
 
-`svdwrapper` is currently concerned with **dense SVD**. Sparse, randomized or truncated SVD algorithms are outside the present scope.
+`svdwrapper` is currently concerned with **dense SVD**. Sparse, randomized or
+truncated SVD algorithms are outside the present scope.
 
 ## License
 
