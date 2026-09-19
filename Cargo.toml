@@ -17,7 +17,7 @@ walkdir = "2"
 
 [dependencies]
 cudarc = { version = "0.19.3", features = ["driver", "nvrtc", "cusolver", "cuda-version-from-build-system"], optional = true }
-jlrs = { version = "0.23", features = ["multi-rt", "jlrs-derive", "async-rt"], optional = true }
+jlrs = { version = "0.23", features = ["multi-rt", "jlrs-derive", "tokio-rt"], optional = true }
 
 libc = "0.2"
 anyhow = "1.0.102"

@@ -6,12 +6,17 @@ current_dir      := justfile_directory()
 default: build
 
 build:
-    cargo build --features cpu,cuda
-    RUST_BACKTRACE=1 cargo test --features cpu,cuda,
-    cargo clippy --features cpu,cuda
+    cargo build --features cpu
+    RUST_BACKTRACE=1 cargo test --features cpu
+    cargo clippy --features cpu
+
+build_all:
+    cargo build --features cpu,cuda,julia
+    RUST_BACKTRACE=1 cargo test --features cpu,cuda,julia
+    cargo clippy --features cpu,cuda,julia
 
 benchmark:
-    cargo test --release --features cpu,cuda -- --ignored --nocapture
+    cargo test --release --features cpu,cuda,julia -- --ignored --nocapture
 
 run:
     cargo run --features cpu,cuda

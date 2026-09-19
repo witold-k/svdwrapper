@@ -1,24 +1,9 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright (c) 2026 Witold Kaminski
 
-# call julia and execute first
-# using Pkg
-# Pkg.add("CUDA")
-
-#using CUDA
 using LinearAlgebra
 
-function svd_cuda_f64(a::Array{Float64,2})
-    dA = CuArray(a)              # move to GPU
-    F  = svd(dA)                 # SVD on GPU (CUSOLVER under the hood)
-    # bring results back to CPU as regular Arrays
-    return (Array(F.U), Array(F.S), Array(F.Vt))
-end
-
 function svd_cpu_f64(a::Array{Float64,2})
-    dA = a 
-    F  = svd(dA)                 
-    # bring results back to CPU as regular Arrays
-    return (Array(F.U), Array(F.S), Array(F.Vt))
+    f = svd(a)
+    return (f.U, f.S, f.Vt)
 end
-

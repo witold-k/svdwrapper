@@ -15,6 +15,9 @@ pub mod svd;
 #[cfg(feature = "cuda")]
 mod cuda_common;
 
+#[cfg(feature = "julia")]
+mod julia_common;
+
 #[cfg(feature = "cpu")]
 pub mod svd_cpu_f32_impl;
 
