@@ -1,4 +1,4 @@
-#[cfg(any(feature = "julia", feature = "opencl"))]
+#[cfg(feature = "julia")]
 use std::path::{Path, PathBuf};
 #[cfg(feature = "julia")]
 use std::env;
@@ -6,30 +6,6 @@ use std::env;
 #[cfg(any(feature = "cpu", feature = "julia"))]
 fn cpu() {
     println!("cargo:rustc-link-lib=openblas");
-}
-
-#[cfg(feature = "opencl")]
-fn opencl() {
-    use std::env;
-    use std::path::PathBuf;
-    println!("cargo:rustc-link-lib=magma");
-    let mut builder = bindgen::Builder::default()
-        .allowlist_function("magma_.*");
-    // Optional: Include MAGMA headers dynamically if your project requires it
-    if std::path::Path::new("/usr/include/magma.h").exists() {
-        builder = builder
-            .header("/usr/include/magma.h")
-            .clang_arg("-I/usr/include");
-    }
-
-    let bindings = builder
-        .generate()
-        .expect("Unable to generate dynamic CUDA/MAGMA bindings");
-
-    let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
-    bindings
-        .write_to_file(out_path.join("magma_bindings.rs"))
-        .expect("Couldn't write bindings to target OUT_DIR!");
 }
 
 #[cfg(feature = "cuda")]
@@ -136,8 +112,6 @@ fn main() {
     cpu();
     #[cfg(feature = "cuda")]
     cuda();
-    #[cfg(feature = "opencl")]
-    opencl();
     #[cfg(feature = "julia")]
     julia();
 }

@@ -1,36 +1,9 @@
-# doc
+# Documentation
 
 - human rewrite
-- only for dense SVD
+- document dense-SVD-only scope more fully
 
-# bugs
+# Features
 
-- only english language
-
-# optimizations
-
-- Singular values must not be stored in a matrix, instead vector
-
-# features
-
-- provide julia wrapper
-- provide AMD rocm wrapper
-- provide opencl wrapper
-
-
-# missing tests
-
-UᵀU ≈ I
-V Vᵀ ≈ I
-A ≈ U diag(S) Vᵀ
-S descending
-S >= 0
-
-m > n
-m < n
-m = n
-rank deficient
-zero matrix
-identity
-ill-conditioned
-non-contiguous ndarray slice
+- evaluate a maintained external library for a vendor-neutral OpenCL fallback
+- provide AMD ROCm wrapper

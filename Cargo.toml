@@ -7,7 +7,6 @@ edition = "2024"
 default = []
 cuda   = ["dep:cudarc"]
 cpu    = []
-opencl = []
 julia  = ["dep:jlrs"]
 rocm   = []
 

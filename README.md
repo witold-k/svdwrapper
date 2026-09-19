@@ -23,7 +23,7 @@ documented. OpenCL and ROCm are deliberately lower-priority future work.
 | CPU / LAPACK | f32, f64 | Implemented and covered by correctness tests |
 | NVIDIA CUDA / cuSOLVER | f32, f64 | Implemented with checked CUDA/cuSOLVER error handling and correctness tests |
 | Julia | f32, f64 | Implemented with a shared runtime and correctness tests |
-| OpenCL | f32, f64 | Experimental/incomplete; not part of the near-term stabilization target |
+| OpenCL | - | Planned vendor-neutral fallback; backend library still to be selected |
 | AMD ROCm | - | Placeholder only; future work |
 
 This is not yet a production-ready crate. APIs and backend internals may still
@@ -64,7 +64,6 @@ Available feature flags:
 cpu     CPU SVD through ndarray-linalg / LAPACK
 cuda    NVIDIA CUDA SVD through cuSOLVER
 julia   Julia-backed SVD through jlrs
-opencl  Experimental OpenCL/MAGMA path
 rocm    Reserved for a future AMD ROCm backend
 ```
 
@@ -188,9 +187,10 @@ supported consistently by CPU, CUDA and Julia.
 
 OpenCL and ROCm are intentionally not near-term goals.
 
-The existing OpenCL/MAGMA code should currently be treated as experimental
-scaffolding rather than a supported backend. It can be revisited after CPU,
-CUDA and Julia are consistent and well-tested.
+OpenCL remains planned as a vendor-neutral fallback. The previous MAGMA-based
+prototype was removed because it did not provide a viable modern OpenCL SVD
+backend. A future implementation should wrap a maintained external numerical
+library rather than implement SVD inside this crate.
 
 ROCm is a future backend idea only. No working ROCm implementation exists at
 present.
