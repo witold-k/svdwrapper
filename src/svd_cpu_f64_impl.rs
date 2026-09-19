@@ -2,7 +2,7 @@
 // Copyright (c) 2026 Witold Kaminski
 
 use anyhow::anyhow;
-use ndarray::{Array1, ArrayBase, Data, Ix2};
+use ndarray::{ArrayBase, Data, Ix2};
 use ndarray_linalg::SVD;
 use crate::svd::{SvdBackend, SvdResult};
 
@@ -13,22 +13,15 @@ impl SvdBackend<f64> for CpuF64Svd {
         &self,
         a: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     ) -> SvdResult<f64> {
-        // Berechne SVD via LAPACK-Backend
-        let (u, s, vt) = a.svd(true, true)?;
-
-        // FIX 1: Sicheres Handling statt panikgefährdetem unwrap()
-        let u_mat = u.ok_or_else(|| anyhow!("U-Matrix wurde von LAPACK nicht berechnet."))?;
-        let vt_mat = vt.ok_or_else(|| anyhow!("V^T-Matrix wurde von LAPACK nicht berechnet."))?;
-
-        let m = a.nrows();
-        let n = a.ncols();
-        let k = std::cmp::min(m, n);
-
-        let mut sigma = Array1::zeros(k as usize);
-        for i in 0..(k as usize) {
-            sigma[[i]] = s[i];
+        if a.nrows() == 0 || a.ncols() == 0 {
+            return Err(anyhow!("SVD input matrix must be non-empty"));
         }
 
-        Ok((u_mat, sigma, vt_mat))
+        let (u, singular_values, vt) = a.svd(true, true)?;
+
+        let u = u.ok_or_else(|| anyhow!("LAPACK did not return U"))?;
+        let vt = vt.ok_or_else(|| anyhow!("LAPACK did not return V^T"))?;
+
+        Ok((u, singular_values, vt))
     }
 }

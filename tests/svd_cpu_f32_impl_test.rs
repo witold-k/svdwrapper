@@ -3,75 +3,103 @@
 
 #![cfg(feature = "cpu")]
 
-use svdwrapper::{create_backend_f32, Backend, svd::mul_cpu_mat_vec_mat_f32};
-use ndarray::Array2;
-use ndarray_rand::RandomExt;
-use ndarray_rand::rand_distr::Uniform;
-use std::time::Instant;
+use ndarray::{array, s, Array2, ArrayBase, Data, Ix2};
+use svdwrapper::{create_backend_f32, svd::mul_cpu_mat_vec_mat_f32, Backend};
 
-#[test]
-fn test_cpu_f32_svd_correctness() {
-    // 1. Verwende eine rechteckige Matrix (M = 4, N = 3) um das Sigma-Layout zu prüfen
-    let a = Array2::from_shape_vec(
-        (4, 3),
-        vec![
-            3.0,  6.0,  9.0,
-            12.0, 15.0, 18.0,
-            21.0, 24.0, 27.0,
-            30.0, 33.0, 36.0,
-        ],
-    ).unwrap();
+const EPSILON: f32 = 2.0e-4;
 
-    // 2. CPU Backend initialisieren
-    let backend = create_backend_f32(Backend::CpuF32);
-
-    // 3. SVD berechnen
-    let (u, sigma, vt) = backend.compute_svd(&a).expect("CPU SVD fehlgeschlagen");
-
-    // 4. Dimensionen validieren (Sigma MUSS 4x3 sein, nicht 3x3)
-    assert_eq!(u.shape(), &[4, 4], "U-Matrix hat falsche Dimension");
-    assert_eq!(sigma.shape(), &[3], "Sigma-Matrix hat falsche Dimension");
-    assert_eq!(vt.shape(), &[3, 3], "V^T-Matrix hat falsche Dimension");
-
-    // 5. Mathematische Validierung via Rekonstruktion: A = U * Sigma * Vt
-    let a_reconstructed = mul_cpu_mat_vec_mat_f32(&u, &sigma, &vt);
-
-    // Hohe Präzision dank f32 LAPACK-Unterstützung
-    let epsilon = 1e-5f32;
-    for r in 0..a.nrows() {
-        for c in 0..a.ncols() {
-            let diff = (a[[r, c]] - a_reconstructed[[r, c]]).abs();
-            assert!(
-                diff < epsilon,
-                "Rekonstruktionsfehler bei Index [{}, {}]: Erwartet {}, Erhalten {} (Diff: {})",
-                r, c, a[[r, c]], a_reconstructed[[r, c]], diff
-            );
-        }
+fn assert_matrix_close(actual: &Array2<f32>, expected: &Array2<f32>) {
+    assert_eq!(actual.dim(), expected.dim());
+    for ((row, col), value) in actual.indexed_iter() {
+        let diff = (*value - expected[(row, col)]).abs();
+        assert!(diff <= EPSILON, "matrix mismatch at ({row}, {col}): diff={diff}");
     }
-    println!("✓ Mathematische Korrektheitsprüfung für CpuSvd erfolgreich bestanden!");
+}
+
+fn assert_valid_svd(a: &ArrayBase<impl Data<Elem = f32>, Ix2>) {
+    let backend = create_backend_f32(Backend::CpuF32);
+    let (u, singular_values, vt) = backend.compute_svd(a).expect("CPU f32 SVD failed");
+
+    assert_eq!(u.dim(), (a.nrows(), a.nrows()));
+    assert_eq!(singular_values.len(), a.nrows().min(a.ncols()));
+    assert_eq!(vt.dim(), (a.ncols(), a.ncols()));
+
+    let reconstructed = mul_cpu_mat_vec_mat_f32(&u, &singular_values, &vt);
+    assert_matrix_close(&reconstructed, &a.to_owned());
+
+    let utu = u.t().dot(&u);
+    let vv_t = vt.dot(&vt.t());
+    assert_matrix_close(&utu, &Array2::<f32>::eye(u.ncols()));
+    assert_matrix_close(&vv_t, &Array2::<f32>::eye(vt.nrows()));
+
+    assert!(singular_values.iter().all(|value| *value >= 0.0));
+    assert!(singular_values.windows(2).into_iter().all(|pair| pair[0] + EPSILON >= pair[1]));
 }
 
 #[test]
-#[ignore] // Ausführen mit 'cargo test --test svd_cpu_impl_test benchmark_cpu_large_matrix --release -- --ignored'
-fn benchmark_cpu_large_matrix() {
-    println!("Generiere 10000x10000 Zufallsmatrix (f32) für CPU...");
-    let start_setup = Instant::now();
-    let dist = Uniform::new(1.0, 10.0).unwrap();
-    let a = Array2::<f32>::random((10000, 10000), dist);
-    println!("Matrix generiert in: {:?}", start_setup.elapsed());
-
-    let backend = create_backend_f32(Backend::CpuF32);
-
-    println!("Starte SVD auf der CPU...");
-    let start_calc = Instant::now();
-    let (u, s, vh) = backend.compute_svd(&a).unwrap();
-    let duration = start_calc.elapsed();
-
-    println!("CPU SVD erfolgreich beendet!");
-    println!("Ausgabe-Dimensionen:");
-    println!("  U Shape:  {:?}", u.shape());
-    println!("  S Shape:  {:?}", s.shape());
-    println!("  Vh Shape: {:?}", vh.shape());
-    println!("Berechnungszeit (CPU): {:?}", duration);
+fn tall_matrix() {
+    assert_valid_svd(&array![[1.,2.,3.],[4.,5.,6.],[7.,8.,10.],[10.,11.,13.]]);
 }
 
+#[test]
+fn wide_matrix() {
+    assert_valid_svd(&array![[1.,2.,3.,4.],[5.,7.,8.,9.],[10.,11.,13.,14.]]);
+}
+
+#[test]
+fn square_identity_matrix() {
+    assert_valid_svd(&Array2::<f32>::eye(4));
+}
+
+#[test]
+fn rank_deficient_matrix() {
+    assert_valid_svd(&array![[1.,2.,3.],[2.,4.,6.],[3.,6.,9.],[4.,8.,12.]]);
+}
+
+#[test]
+fn zero_matrix() {
+    assert_valid_svd(&Array2::<f32>::zeros((4, 3)));
+}
+
+#[test]
+fn ill_conditioned_matrix() {
+    assert_valid_svd(&array![[1.,0.,0.],[0.,1.0e-5,0.],[0.,0.,1.0e-5]]);
+}
+
+#[test]
+fn non_contiguous_view() {
+    let source = array![
+        [1.,99.,2.,99.,3.],
+        [4.,99.,5.,99.,6.],
+        [7.,99.,8.,99.,10.],
+        [11.,99.,12.,99.,13.]
+    ];
+    let view = source.slice(s![.., ..;2]);
+    assert!(!view.is_standard_layout());
+    assert_valid_svd(&view);
+}
+
+#[test]
+fn empty_matrix_is_rejected() {
+    let backend = create_backend_f32(Backend::CpuF32);
+    let a = Array2::<f32>::zeros((0, 3));
+    assert!(backend.compute_svd(&a).is_err());
+}
+
+#[test]
+#[ignore = "performance stress test"]
+fn benchmark_cpu_large_matrix() {
+    use ndarray_rand::{rand_distr::Uniform, RandomExt};
+    use std::time::Instant;
+
+    const SIZE: usize = 10_000;
+
+    let a = Array2::<f32>::random((SIZE, SIZE), Uniform::new(1.0, 10.0).unwrap());
+    let backend = create_backend_f32(Backend::CpuF32);
+
+    let start = Instant::now();
+    let (u, singular_values, vt) = backend.compute_svd(&a).expect("CPU f32 stress-test SVD failed");
+    let elapsed = start.elapsed();
+
+    println!("CPU f32 {SIZE}x{SIZE}: U={:?}, S={}, Vt={:?}, elapsed={elapsed:?}", u.dim(), singular_values.len(), vt.dim());
+}
