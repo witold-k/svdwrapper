@@ -9,8 +9,8 @@ The intended public model is simple:
 A = U * diag(S) * Vt
 ```
 
-Backends expose the same high-level Rust API and return `(U, S, Vt)`, with the
-singular values stored as a vector.
+Backends expose the same high-level Rust API and return `SvdOutput { u, s, vt }`,
+with the singular values stored as a vector.
 
 The project is under active development. CPU, CUDA and Julia paths already
 exist; the immediate work is to make those paths consistent, well-tested and
@@ -94,11 +94,11 @@ fn main() -> anyhow::Result<()> {
     )?;
 
     let svd = Svd::<f64>::new(Backend::Cpu)?;
-    let (u, s, vt) = svd.compute(&a, SvdMode::Full)?;
+    let output = svd.compute(&a, SvdMode::Full)?;
 
-    println!("U:  {:?}", u.shape());
-    println!("S:  {:?}", s.shape());
-    println!("Vt: {:?}", vt.shape());
+    println!("U:  {:?}", output.u.shape());
+    println!("S:  {:?}", output.s.shape());
+    println!("Vt: {:?}", output.vt.shape());
 
     Ok(())
 }
@@ -117,7 +117,7 @@ The CUDA backend currently supports both `f32` and `f64`:
 use svdwrapper::{Backend, Svd, SvdMode};
 
 let svd = Svd::<f32>::new(Backend::Cuda)?;
-let (u, s, vt) = svd.compute(&a, SvdMode::Full)?;
+let output = svd.compute(&a, SvdMode::Full)?;
 ```
 
 A working NVIDIA driver and CUDA toolkit are required. The build script looks

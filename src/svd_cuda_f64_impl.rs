@@ -2,7 +2,7 @@
 // Copyright (c) 2026 Witold Kaminski
 
 use crate::cuda_common::{check_cuda, checked_bytes, DeviceBuffer};
-use crate::svd::{SvdBackend, SvdMode, SvdResult};
+use crate::svd::{SvdBackend, SvdMode, SvdOutput, SvdResult};
 use anyhow::{anyhow, Result};
 use cudarc::cusolver::sys::*;
 use cudarc::driver::sys::*;
@@ -199,6 +199,6 @@ impl SvdBackend<f64> for CudaF64Svd {
             (solver_u, solver_vt)
         };
 
-        Ok((u, Array1::from_vec(singular_values), vt))
+        Ok(SvdOutput { u, s: Array1::from_vec(singular_values), vt })
     }
 }

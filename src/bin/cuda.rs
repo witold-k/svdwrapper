@@ -20,10 +20,10 @@ fn run_f32() {
     let backend = Svd::<f32>::new(Backend::Cuda).expect("backend initialization failed");
 
     let start = Instant::now();
-    let (u, s, vt) = backend.compute(&a, SvdMode::Full).expect("cuda f32 SVD failed");
+    let output = backend.compute(&a, SvdMode::Full).expect("cuda f32 SVD failed");
     let elapsed = start.elapsed();
 
-    println!("cuda f32: U={:?}, S={}, Vt={:?}, elapsed={elapsed:?}", u.dim(), s.len(), vt.dim());
+    println!("cuda f32: U={:?}, S={}, Vt={:?}, elapsed={elapsed:?}", output.u.dim(), output.s.len(), output.vt.dim());
 }
 
 #[cfg(feature = "cuda")]
@@ -32,10 +32,10 @@ fn run_f64() {
     let backend = Svd::<f64>::new(Backend::Cuda).expect("backend initialization failed");
 
     let start = Instant::now();
-    let (u, s, vt) = backend.compute(&a, SvdMode::Full).expect("cuda f64 SVD failed");
+    let output = backend.compute(&a, SvdMode::Full).expect("cuda f64 SVD failed");
     let elapsed = start.elapsed();
 
-    println!("cuda f64: U={:?}, S={}, Vt={:?}, elapsed={elapsed:?}", u.dim(), s.len(), vt.dim());
+    println!("cuda f64: U={:?}, S={}, Vt={:?}, elapsed={elapsed:?}", output.u.dim(), output.s.len(), output.vt.dim());
 }
 
 #[cfg(feature = "cuda")]

@@ -12,11 +12,19 @@ pub enum SvdMode {
     Reduced,
 }
 
-/// Standardized SVD result `(U, S, Vt)`.
-///
-/// `S` contains `min(m, n)` singular values as a one-dimensional vector.
-/// `U` and `Vt` use full or reduced shapes according to [`SvdMode`].
-pub type SvdResult<T> = Result<(Array2<T>, Array1<T>, Array2<T>), anyhow::Error>;
+/// Factors produced by a singular value decomposition.
+#[derive(Debug, Clone)]
+pub struct SvdOutput<T> {
+    /// Left singular vectors.
+    pub u: Array2<T>,
+    /// Singular values in descending order.
+    pub s: Array1<T>,
+    /// Transposed right singular vectors.
+    pub vt: Array2<T>,
+}
+
+/// Result of an SVD computation.
+pub type SvdResult<T> = Result<SvdOutput<T>, anyhow::Error>;
 
 /// A unified abstraction trait that every underlying mathematical hardware backend must implement.
 ///

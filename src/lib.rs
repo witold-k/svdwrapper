@@ -28,7 +28,7 @@ mod svd_julia_f64_impl;
 use ndarray::{ArrayBase, Data, Ix2};
 use std::marker::PhantomData;
 
-pub use crate::svd::{SvdMode, SvdResult};
+pub use crate::svd::{SvdMode, SvdOutput, SvdResult};
 
 #[cfg(any(feature = "cpu", feature = "cuda", feature = "julia"))]
 use crate::svd::SvdBackend;

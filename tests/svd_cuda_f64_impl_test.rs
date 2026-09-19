@@ -34,23 +34,23 @@ fn assert_orthogonal(matrix: &Array2<f64>, epsilon: f64) {
 
 fn assert_valid_svd(a: &Array2<f64>) {
     let backend = Svd::<f64>::new(Backend::Cuda).expect("CUDA backend initialization failed");
-    let (u, s, vt) = backend.compute(a, SvdMode::Full).expect("CUDA SVD failed");
+    let output = backend.compute(a, SvdMode::Full).expect("CUDA SVD failed");
 
-    assert_eq!(u.dim(), (a.nrows(), a.nrows()));
-    assert_eq!(s.len(), a.nrows().min(a.ncols()));
-    assert_eq!(vt.dim(), (a.ncols(), a.ncols()));
+    assert_eq!(output.u.dim(), (a.nrows(), a.nrows()));
+    assert_eq!(output.s.len(), a.nrows().min(a.ncols()));
+    assert_eq!(output.vt.dim(), (a.ncols(), a.ncols()));
 
-    let reconstructed = reconstruct(&u, &s, &vt);
+    let reconstructed = reconstruct(&output.u, &output.s, &output.vt);
     assert_matrix_close(&reconstructed, a, EPSILON);
-    assert_orthogonal(&u, EPSILON);
-    assert_orthogonal(&vt, EPSILON);
+    assert_orthogonal(&output.u, EPSILON);
+    assert_orthogonal(&output.vt, EPSILON);
 
-    assert!(s.iter().all(|value| *value >= -EPSILON));
+    assert!(output.s.iter().all(|value| *value >= -EPSILON));
     assert!(
-        s.windows(2)
+        output.s.windows(2)
             .into_iter()
             .all(|window| window[0] + EPSILON >= window[1]),
-        "singular values are not sorted descending: {s:?}"
+        "singular values are not sorted descending: {:?}", output.s
     );
 }
 
@@ -114,8 +114,8 @@ fn non_contiguous_view() {
     assert!(!view.is_standard_layout());
 
     let backend = Svd::<f64>::new(Backend::Cuda).expect("CUDA backend initialization failed");
-    let (u, s, vt) = backend.compute(&view, SvdMode::Full).expect("CUDA SVD failed");
-    let reconstructed = reconstruct(&u, &s, &vt);
+    let output = backend.compute(&view, SvdMode::Full).expect("CUDA SVD failed");
+    let reconstructed = reconstruct(&output.u, &output.s, &output.vt);
     assert_matrix_close(&reconstructed, &view.to_owned(), EPSILON);
 }
 
@@ -131,13 +131,13 @@ fn empty_matrix_is_rejected() {
 fn reduced_mode_has_reduced_shapes() {
     let a = Array2::<f64>::from_shape_fn((4, 3), |(row, col)| (row * 3 + col + 1) as f64);
     let backend = Svd::<f64>::new(Backend::Cuda).expect("CUDA backend initialization failed");
-    let (u, s, vt) = backend
+    let output = backend
         .compute(&a, SvdMode::Reduced)
         .expect("reduced SVD failed");
 
-    assert_eq!(u.dim(), (4, 3));
-    assert_eq!(s.len(), 3);
-    assert_eq!(vt.dim(), (3, 3));
-    let reconstructed = reconstruct(&u, &s, &vt);
+    assert_eq!(output.u.dim(), (4, 3));
+    assert_eq!(output.s.len(), 3);
+    assert_eq!(output.vt.dim(), (3, 3));
+    let reconstructed = reconstruct(&output.u, &output.s, &output.vt);
     assert_matrix_close(&reconstructed, &a, EPSILON);
 }

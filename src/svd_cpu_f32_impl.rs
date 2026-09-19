@@ -4,7 +4,7 @@
 use anyhow::anyhow;
 use ndarray::{ArrayBase, Data, Ix2};
 use ndarray_linalg::{JobSvd, SVDDC};
-use crate::svd::{SvdBackend, SvdMode, SvdResult};
+use crate::svd::{SvdBackend, SvdMode, SvdOutput, SvdResult};
 
 pub struct CpuF32Svd;
 
@@ -27,6 +27,6 @@ impl SvdBackend<f32> for CpuF32Svd {
         let u = u.ok_or_else(|| anyhow!("LAPACK did not return U"))?;
         let vt = vt.ok_or_else(|| anyhow!("LAPACK did not return V^T"))?;
 
-        Ok((u, singular_values, vt))
+        Ok(SvdOutput { u, s: singular_values, vt })
     }
 }

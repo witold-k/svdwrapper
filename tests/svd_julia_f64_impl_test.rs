@@ -17,14 +17,14 @@ fn reconstruct(u: &Array2<f64>, s: &ndarray::Array1<f64>, vt: &Array2<f64>) -> A
 
 fn assert_valid_svd(a: &ArrayBase<impl Data<Elem = f64>, Ix2>) {
     let backend = Svd::<f64>::new(Backend::Julia).expect("Julia backend initialization failed");
-    let (u, singular_values, vt) = backend.compute(a, SvdMode::Full).expect("Julia f64 SVD failed");
+    let output = backend.compute(a, SvdMode::Full).expect("Julia f64 SVD failed");
 
     let k = a.nrows().min(a.ncols());
-    assert_eq!(u.dim(), (a.nrows(), a.nrows()));
-    assert_eq!(singular_values.len(), k);
-    assert_eq!(vt.dim(), (a.ncols(), a.ncols()));
+    assert_eq!(output.u.dim(), (a.nrows(), a.nrows()));
+    assert_eq!(output.s.len(), k);
+    assert_eq!(output.vt.dim(), (a.ncols(), a.ncols()));
 
-    let reconstructed = reconstruct(&u, &singular_values, &vt);
+    let reconstructed = reconstruct(&output.u, &output.s, &output.vt);
     for row in 0..a.nrows() {
         for col in 0..a.ncols() {
             let diff = (a[(row, col)] - reconstructed[(row, col)]).abs();
@@ -32,8 +32,8 @@ fn assert_valid_svd(a: &ArrayBase<impl Data<Elem = f64>, Ix2>) {
         }
     }
 
-    let utu = u.t().dot(&u);
-    let vv_t = vt.dot(&vt.t());
+    let utu = output.u.t().dot(&output.u);
+    let vv_t = output.vt.dot(&output.vt.t());
     for row in 0..a.nrows() {
         for col in 0..a.nrows() {
             let expected = if row == col { 1.0 } else { 0.0 };
@@ -47,8 +47,8 @@ fn assert_valid_svd(a: &ArrayBase<impl Data<Elem = f64>, Ix2>) {
         }
     }
 
-    assert!(singular_values.iter().all(|value| *value >= 0.0));
-    assert!(singular_values.windows(2).into_iter().all(|pair| pair[0] >= pair[1]));
+    assert!(output.s.iter().all(|value| *value >= 0.0));
+    assert!(output.s.windows(2).into_iter().all(|pair| pair[0] >= pair[1]));
 }
 
 #[test]
@@ -132,14 +132,14 @@ fn benchmark_repeated_svd() {
 fn reduced_mode_has_reduced_shapes() {
     let a = Array2::<f64>::from_shape_fn((4, 3), |(row, col)| (row * 3 + col + 1) as f64);
     let backend = Svd::<f64>::new(Backend::Julia).expect("Julia backend initialization failed");
-    let (u, s, vt) = backend
+    let output = backend
         .compute(&a, SvdMode::Reduced)
         .expect("reduced SVD failed");
 
-    assert_eq!(u.dim(), (4, 3));
-    assert_eq!(s.len(), 3);
-    assert_eq!(vt.dim(), (3, 3));
-    let reconstructed = reconstruct(&u, &s, &vt);
+    assert_eq!(output.u.dim(), (4, 3));
+    assert_eq!(output.s.len(), 3);
+    assert_eq!(output.vt.dim(), (3, 3));
+    let reconstructed = reconstruct(&output.u, &output.s, &output.vt);
     for row in 0..a.nrows() {
         for col in 0..a.ncols() {
             assert!((a[(row, col)] - reconstructed[(row, col)]).abs() <= EPSILON);

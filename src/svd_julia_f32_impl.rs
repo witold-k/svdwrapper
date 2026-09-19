@@ -2,7 +2,7 @@
 // Copyright (c) 2026 Witold Kaminski
 
 use crate::julia_common;
-use crate::svd::{SvdBackend, SvdMode, SvdResult};
+use crate::svd::{SvdBackend, SvdMode, SvdOutput, SvdResult};
 use anyhow::{anyhow, Result};
 use jlrs::data::managed::array::dimensions::Dims;
 use jlrs::data::managed::array::TypedArray;
@@ -17,7 +17,7 @@ fn run_julia_svd(
     matrix_data: Vec<f32>,
     shape: [usize; 2],
     mode: SvdMode,
-) -> Result<(Array2<f32>, Array1<f32>, Array2<f32>)> {
+) -> Result<SvdOutput<f32>> {
     let dims = &[shape[0], shape[1]];
     let julia_matrix = TypedArray::<f32>::from_vec(&mut frame, matrix_data, dims)
         .map_err(|e| anyhow!("jlrs error creating Julia matrix: {e:?}"))?
@@ -56,7 +56,7 @@ fn run_julia_svd(
         let s = Array1::from_vec(s_slice);
         let vt = Array2::from_shape_vec((vt_cols, vt_rows), vt_slice)?.reversed_axes();
 
-        Ok((u, s, vt))
+        Ok(SvdOutput { u, s, vt })
     }
 }
 

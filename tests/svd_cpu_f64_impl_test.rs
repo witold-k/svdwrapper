@@ -25,22 +25,22 @@ fn assert_matrix_close(actual: &Array2<f64>, expected: &Array2<f64>) {
 
 fn assert_valid_svd(a: &ArrayBase<impl Data<Elem = f64>, Ix2>) {
     let backend = Svd::<f64>::new(Backend::Cpu).expect("backend initialization failed");
-    let (u, singular_values, vt) = backend.compute(a, SvdMode::Full).expect("CPU f64 SVD failed");
+    let output = backend.compute(a, SvdMode::Full).expect("CPU f64 SVD failed");
 
-    assert_eq!(u.dim(), (a.nrows(), a.nrows()));
-    assert_eq!(singular_values.len(), a.nrows().min(a.ncols()));
-    assert_eq!(vt.dim(), (a.ncols(), a.ncols()));
+    assert_eq!(output.u.dim(), (a.nrows(), a.nrows()));
+    assert_eq!(output.s.len(), a.nrows().min(a.ncols()));
+    assert_eq!(output.vt.dim(), (a.ncols(), a.ncols()));
 
-    let reconstructed = reconstruct(&u, &singular_values, &vt);
+    let reconstructed = reconstruct(&output.u, &output.s, &output.vt);
     assert_matrix_close(&reconstructed, &a.to_owned());
 
-    let utu = u.t().dot(&u);
-    let vv_t = vt.dot(&vt.t());
-    assert_matrix_close(&utu, &Array2::<f64>::eye(u.ncols()));
-    assert_matrix_close(&vv_t, &Array2::<f64>::eye(vt.nrows()));
+    let utu = output.u.t().dot(&output.u);
+    let vv_t = output.vt.dot(&output.vt.t());
+    assert_matrix_close(&utu, &Array2::<f64>::eye(output.u.ncols()));
+    assert_matrix_close(&vv_t, &Array2::<f64>::eye(output.vt.nrows()));
 
-    assert!(singular_values.iter().all(|value| *value >= 0.0));
-    assert!(singular_values.windows(2).into_iter().all(|pair| pair[0] + EPSILON >= pair[1]));
+    assert!(output.s.iter().all(|value| *value >= 0.0));
+    assert!(output.s.windows(2).into_iter().all(|pair| pair[0] + EPSILON >= pair[1]));
 }
 
 #[test]
@@ -105,23 +105,23 @@ fn benchmark_cpu_large_matrix() {
     let backend = Svd::<f64>::new(Backend::Cpu).expect("backend initialization failed");
 
     let start = Instant::now();
-    let (u, singular_values, vt) = backend.compute(&a, SvdMode::Full).expect("CPU f64 stress-test SVD failed");
+    let output = backend.compute(&a, SvdMode::Full).expect("CPU f64 stress-test SVD failed");
     let elapsed = start.elapsed();
 
-    println!("CPU f64 {SIZE}x{SIZE}: U={:?}, S={}, Vt={:?}, elapsed={elapsed:?}", u.dim(), singular_values.len(), vt.dim());
+    println!("CPU f64 {SIZE}x{SIZE}: U={:?}, S={}, Vt={:?}, elapsed={elapsed:?}", output.u.dim(), output.s.len(), output.vt.dim());
 }
 
 #[test]
 fn reduced_mode_has_reduced_shapes() {
     let a = Array2::<f64>::from_shape_fn((4, 3), |(row, col)| (row * 3 + col + 1) as f64);
     let backend = Svd::<f64>::new(Backend::Cpu).expect("backend initialization failed");
-    let (u, s, vt) = backend
+    let output = backend
         .compute(&a, SvdMode::Reduced)
         .expect("reduced SVD failed");
 
-    assert_eq!(u.dim(), (4, 3));
-    assert_eq!(s.len(), 3);
-    assert_eq!(vt.dim(), (3, 3));
-    let reconstructed = reconstruct(&u, &s, &vt);
+    assert_eq!(output.u.dim(), (4, 3));
+    assert_eq!(output.s.len(), 3);
+    assert_eq!(output.vt.dim(), (3, 3));
+    let reconstructed = reconstruct(&output.u, &output.s, &output.vt);
     assert_matrix_close(&reconstructed, &a);
 }
