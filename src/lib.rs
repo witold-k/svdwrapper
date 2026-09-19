@@ -12,6 +12,9 @@
 
 pub mod svd;
 
+#[cfg(feature = "cuda")]
+mod cuda_common;
+
 #[cfg(feature = "cpu")]
 pub mod svd_cpu_f32_impl;
 
@@ -70,7 +73,7 @@ pub enum Backend {
     CpuF64,
     /// GPU-accelerated execution with 32-bit floating-point precision via Nvidia cuSOLVER.
     CudaF32,
-    /// GPU-accelerated execution with 64-bit floating-point precision via Nvidia cuSOLVER (Jacobi method).
+    /// GPU-accelerated execution with 64-bit floating-point precision via NVIDIA cuSOLVER.
     CudaF64,
     /// Hardware-agnostic GPU/accelerator execution over OpenCL.
     OpenClF32,
@@ -195,45 +198,60 @@ impl SvdManager<f32> {
     }
 }
 
-/// Factory function to instantiate an `SvdManager` tailored for double-precision (`f64`) workloads.
+/// Fallible factory for a double-precision (`f64`) SVD backend.
+///
+/// Prefer this function when backend initialization can fail at runtime, notably
+/// for CUDA where driver, device, context, and cuSOLVER initialization are fallible.
+pub fn try_create_backend_f64(backend: Backend) -> anyhow::Result<SvdManager<f64>> {
+    match backend {
+        #[cfg(feature = "cpu")]
+        Backend::CpuF64 => Ok(SvdManager::<f64>::CpuF64(CpuF64Svd)),
+        #[cfg(feature = "cuda")]
+        Backend::CudaF64 => Ok(SvdManager::<f64>::CudaF64(CudaF64Svd::new()?)),
+        #[cfg(feature = "julia")]
+        Backend::JuliaF64 => Ok(SvdManager::<f64>::JuliaF64(JuliaF64Svd {})),
+        _ => anyhow::bail!(
+            "The requested f64 backend variant is not compiled in this build configuration."
+        ),
+    }
+}
+
+/// Compatibility factory for a double-precision (`f64`) SVD backend.
 ///
 /// # Panics
 ///
-/// Panics if the targeted `Backend` has not been compiled via its corresponding Cargo feature flag
-/// (e.g., `cuda`, `cpu`, or `opencl`) within the current build environment.
+/// Panics when the requested backend is unavailable or runtime initialization fails.
+/// New code should prefer `try_create_backend_f64`.
 pub fn create_backend_f64(backend: Backend) -> SvdManager<f64> {
+    try_create_backend_f64(backend)
+        .unwrap_or_else(|error| panic!("failed to create f64 SVD backend: {error:#}"))
+}
+
+/// Fallible factory for a single-precision (`f32`) SVD backend.
+///
+/// Prefer this function when backend initialization can fail at runtime, notably
+/// for CUDA where driver, device, context, and cuSOLVER initialization are fallible.
+pub fn try_create_backend_f32(backend: Backend) -> anyhow::Result<SvdManager<f32>> {
     match backend {
         #[cfg(feature = "cpu")]
-        Backend::CpuF64 => SvdManager::<f64>::CpuF64(CpuF64Svd),
+        Backend::CpuF32 => Ok(SvdManager::<f32>::CpuF32(CpuF32Svd)),
         #[cfg(feature = "cuda")]
-        Backend::CudaF64 => SvdManager::<f64>::CudaF64(CudaF64Svd::new().unwrap()),
-        #[cfg(feature = "opencl")]
-        Backend::OpenClF64 => SvdManager::<f64>::OpenCl(OpenClF64Svd::new().unwrap()),
+        Backend::CudaF32 => Ok(SvdManager::<f32>::CudaF32(CudaF32Svd::new()?)),
         #[cfg(feature = "julia")]
-        Backend::JuliaF64 => SvdManager::<f64>::JuliaF64(JuliaF64Svd{}),
-        _ => panic!("The requested f64 backend variant is not compiled in this build configuration."),
+        Backend::JuliaF32 => Ok(SvdManager::<f32>::JuliaF32(JuliaF32Svd {})),
+        _ => anyhow::bail!(
+            "The requested f32 backend variant is not compiled in this build configuration."
+        ),
     }
 }
 
-/// Factory function to instantiate an `SvdManager` tailored for single-precision (`f32`) workloads.
+/// Compatibility factory for a single-precision (`f32`) SVD backend.
 ///
 /// # Panics
 ///
-/// Panics if:
-/// * A non-CUDA backend is requested (as `f32` SVD routines are exclusively implemented via CUDA in this crate).
-/// * The `cuda` Cargo feature flag was missing during the compilation stage.
-#[allow(unused_variables)]
+/// Panics when the requested backend is unavailable or runtime initialization fails.
+/// New code should prefer `try_create_backend_f32`.
 pub fn create_backend_f32(backend: Backend) -> SvdManager<f32> {
-    match backend {
-        #[cfg(feature = "cpu")]
-        Backend::CpuF32 => SvdManager::<f32>::CpuF32(CpuF32Svd),
-        #[cfg(feature = "cuda")]
-        Backend::CudaF32 => SvdManager::<f32>::CudaF32(CudaF32Svd::new().unwrap()),
-        #[cfg(feature = "opencl")]
-        Backend::OpenClF32 => SvdManager::<f32>::OpenCl(OpenClF32Svd::new().unwrap()),
-        #[cfg(feature = "julia")]
-        Backend::JuliaF32 => SvdManager::<f32>::JuliaF32(JuliaF32Svd{}),
-        _ => panic!("Only CudaF32 supports f32 SVD workloads in this compilation configuration."),
-    }
+    try_create_backend_f32(backend)
+        .unwrap_or_else(|error| panic!("failed to create f32 SVD backend: {error:#}"))
 }
-

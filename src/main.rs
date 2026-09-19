@@ -44,7 +44,26 @@ fn svd64() {
     println!("Time elapsed: {:?}", duration);
 }
 
+fn svd32_cpu() {
+    let start = Instant::now();
+
+    let dist = Uniform::new(1.0, 10.0).unwrap();
+    let a = Array2::<f32>::random((10000, 10000), dist);
+
+    let backend = create_backend_f32(Backend::CpuF32);
+
+    let (u, s, vh) = backend.compute_svd(&a).unwrap();
+
+    println!("CPU f32 U =\n{u}");
+    println!("CPU f32 S =\n{s}");
+    println!("CPU f32 Vh =\n{vh}");
+
+    let duration = start.elapsed();
+    println!("CPU f32 time elapsed: {:?}", duration);
+}
+
 fn main() {
     svd32();
     svd64();
+    svd32_cpu();
 }

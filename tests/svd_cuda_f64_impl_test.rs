@@ -3,77 +3,120 @@
 
 #![cfg(feature = "cuda")]
 
-use svdwrapper::{create_backend_f64, Backend, svd::mul_cpu_mat_vec_mat_f64}; // Passe den Cratename ggf. an deine Cargo.toml an
-use ndarray::Array2;
-use ndarray_rand::RandomExt;
-use ndarray_rand::rand_distr::Uniform;
-use std::time::Instant;
+use ndarray::{array, s, Array2};
+use svdwrapper::svd::{mul_cpu_mat_vec_mat_f64, SvdBackend};
+use svdwrapper::svd_cuda_f64_impl::CudaF64Svd;
 
-#[test]
-fn test_cuda_f64_svd_correctness() {
-    // 1. Erstelle eine definierte, nicht-quadratische Testmatrix (M = 4, N = 3)
-    // Damit wird verifiziert, ob min(M,N) im Jacobi-Pfad korrekt isoliert wird.
-    let a = Array2::from_shape_vec(
-        (4, 3),
-        vec![
-            2.0,  4.0,  6.0,
-            8.0,  10.0, 12.0,
-            14.0, 16.0, 18.0,
-            20.0, 22.0, 24.0,
-        ],
-    ).unwrap();
+const EPSILON: f64 = 1.0e-10;
 
-    // 2. f64 Backend initialisieren
-    let backend = create_backend_f64(Backend::CudaF64);
-
-    // 3. SVD via Jacobi (gesvdj) auf der GPU berechnen
-    let (u, sigma, vt) = backend.compute_svd(&a).expect("f64 SVD Berechnung fehlgeschlagen");
-
-    // 4. Dimensions-Validierung
-    assert_eq!(u.shape(), &[4, 4], "U-Matrix hat die falsche Dimension");
-    assert_eq!(sigma.shape(), &[3], "Sigma-Matrix hat die falsche Dimension");
-    assert_eq!(vt.shape(), &[3, 3], "V^T-Matrix hat die falsche Dimension");
-
-    // 5. Mathematische Validierung: Rekonstruktion A = U * Sigma * Vt
-    let a_reconstructed = mul_cpu_mat_vec_mat_f64(&u, &sigma, &vt);
-
-    // Da wir f64 nutzen, wählen wir eine entsprechend schärfere Toleranz (Epsilon)
-    let epsilon = 1e-12f64;
-    for r in 0..a.nrows() {
-        for c in 0..a.ncols() {
-            let diff = (a[[r, c]] - a_reconstructed[[r, c]]).abs();
-            assert!(
-                diff < epsilon,
-                "Rekonstruktionsfehler bei Index [{}, {}]: Erwartet {}, Erhalten {} (Diff: {})",
-                r, c, a[[r, c]], a_reconstructed[[r, c]], diff
-            );
-        }
+fn assert_matrix_close(actual: &Array2<f64>, expected: &Array2<f64>, epsilon: f64) {
+    assert_eq!(actual.dim(), expected.dim());
+    for ((r, c), value) in actual.indexed_iter() {
+        let diff = (*value - expected[[r, c]]).abs();
+        assert!(
+            diff <= epsilon,
+            "matrix mismatch at [{r}, {c}]: actual={value}, expected={}, diff={diff}",
+            expected[[r, c]]
+        );
     }
-    println!("✓ Mathematische Korrektheitsprüfung für CudaF64Svd (Jacobi) erfolgreich bestanden!");
+}
+
+fn assert_orthogonal(matrix: &Array2<f64>, epsilon: f64) {
+    let identity = Array2::<f64>::eye(matrix.ncols());
+    assert_matrix_close(&matrix.t().dot(matrix), &identity, epsilon);
+}
+
+fn assert_valid_svd(a: &Array2<f64>) {
+    let backend = CudaF64Svd::new().expect("CUDA backend initialization failed");
+    let (u, s, vt) = backend.compute_svd(a).expect("CUDA SVD failed");
+
+    assert_eq!(u.dim(), (a.nrows(), a.nrows()));
+    assert_eq!(s.len(), a.nrows().min(a.ncols()));
+    assert_eq!(vt.dim(), (a.ncols(), a.ncols()));
+
+    let reconstructed = mul_cpu_mat_vec_mat_f64(&u, &s, &vt);
+    assert_matrix_close(&reconstructed, a, EPSILON);
+    assert_orthogonal(&u, EPSILON);
+    assert_orthogonal(&vt, EPSILON);
+
+    assert!(s.iter().all(|value| *value >= -EPSILON));
+    assert!(
+        s.windows(2)
+            .into_iter()
+            .all(|window| window[0] + EPSILON >= window[1]),
+        "singular values are not sorted descending: {s:?}"
+    );
 }
 
 #[test]
-#[ignore] // Mit 'cargo test --test cuda_f64_test benchmark_cuda_f64_large_matrix --release -- --ignored' ausführen
-fn benchmark_cuda_f64_large_matrix() {
-    println!("Generiere 10000x10000 Zufallsmatrix (f64) auf der CPU...");
-    let start_setup = Instant::now();
-    let dist = Uniform::new(1.0, 10.0).unwrap();
-    let a = Array2::<f64>::random((10000, 10000), dist);
-    println!("Matrix-Generierung abgeschlossen in: {:?}", start_setup.elapsed());
-
-    println!("Initialisiere CudaF64Svd Backend...");
-    let backend = create_backend_f64(Backend::CudaF64);
-
-    println!("Starte Jacobi-SVD-Berechnung auf der GPU...");
-    let start_calc = Instant::now();
-    let (u, s, vh) = backend.compute_svd(&a).unwrap();
-    let duration = start_calc.elapsed();
-
-    println!("f64 SVD erfolgreich beendet!");
-    println!("Ausgabe-Dimensionen:");
-    println!("  U Shape:  {:?}", u.shape());
-    println!("  S Shape:  {:?}", s.shape());
-    println!("  Vh Shape: {:?}", vh.shape());
-    println!("Reine Berechnungszeit (GPU + Transfers): {:?}", duration);
+fn tall_matrix() {
+    assert_valid_svd(&array![
+        [1.0, 2.0, 3.0],
+        [4.0, 5.0, 6.0],
+        [7.0, 8.0, 10.0],
+        [10.0, 11.0, 13.0]
+    ]);
 }
 
+#[test]
+fn wide_matrix() {
+    assert_valid_svd(&array![
+        [1.0, 2.0, 3.0, 4.0],
+        [5.0, 7.0, 8.0, 9.0],
+        [10.0, 11.0, 13.0, 14.0]
+    ]);
+}
+
+#[test]
+fn square_identity_matrix() {
+    assert_valid_svd(&Array2::<f64>::eye(4));
+}
+
+#[test]
+fn rank_deficient_matrix() {
+    assert_valid_svd(&array![
+        [1.0, 2.0, 3.0],
+        [2.0, 4.0, 6.0],
+        [3.0, 6.0, 9.0],
+        [4.0, 8.0, 12.0]
+    ]);
+}
+
+#[test]
+fn zero_matrix() {
+    assert_valid_svd(&Array2::<f64>::zeros((4, 3)));
+}
+
+#[test]
+fn ill_conditioned_matrix() {
+    assert_valid_svd(&array![
+        [1.0, 0.0, 0.0],
+        [0.0, 1.0e-12, 0.0],
+        [0.0, 0.0, 1.0e-12]
+    ]);
+}
+
+#[test]
+fn non_contiguous_view() {
+    let source = array![
+        [1.0, 99.0, 2.0, 99.0, 3.0],
+        [4.0, 99.0, 5.0, 99.0, 6.0],
+        [7.0, 99.0, 8.0, 99.0, 10.0],
+        [11.0, 99.0, 12.0, 99.0, 13.0]
+    ];
+    let view = source.slice(s![.., ..;2]);
+    assert!(!view.is_standard_layout());
+
+    let backend = CudaF64Svd::new().expect("CUDA backend initialization failed");
+    let (u, s, vt) = backend.compute_svd(&view).expect("CUDA SVD failed");
+    let reconstructed = mul_cpu_mat_vec_mat_f64(&u, &s, &vt);
+    assert_matrix_close(&reconstructed, &view.to_owned(), EPSILON);
+}
+
+#[test]
+fn empty_matrix_is_rejected() {
+    let backend = CudaF64Svd::new().expect("CUDA backend initialization failed");
+    let empty = Array2::<f64>::zeros((0, 3));
+    let error = backend.compute_svd(&empty).expect_err("empty input must fail");
+    assert!(error.to_string().contains("non-empty"));
+}

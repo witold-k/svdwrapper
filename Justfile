@@ -10,6 +10,12 @@ build:
     RUST_BACKTRACE=1 cargo test --features cpu,cuda,
     cargo clippy --features cpu,cuda
 
+benchmark:
+    cargo test --release --features cpu,cuda -- --ignored --nocapture
+
+run:
+    cargo run --features cpu,cuda
+
 fix:
     @RUST_BACKTRACE=1 aifix -l rust -t fix_code -f {{current_dir}} -f {{current_dir}}/..
 

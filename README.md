@@ -36,6 +36,8 @@ In particular:
 - Rectangular matrices must be handled correctly for both `m > n` and `m < n`.
 - Backend resources should follow Rust ownership/RAII rules.
 - Errors from numerical libraries, CUDA and runtime setup should be propagated rather than hidden behind panics where practical.
+- Consistent test layou - tests live under `tests/`, mirror the relative
+  `src/` hierarchy, and use the source filename with a `_test.rs` suffix.
 
 ## Cargo features
 
@@ -99,9 +101,9 @@ For an `m x n` matrix, `S` contains `min(m, n)` singular values. The crate provi
 The CUDA backend currently supports both `f32` and `f64`:
 
 ```rust
-use svdwrapper::{create_backend_f32, Backend};
+use svdwrapper::{try_create_backend_f32, Backend};
 
-let backend = create_backend_f32(Backend::CudaF32);
+let backend = try_create_backend_f32(Backend::CudaF32)?;
 let (u, s, vt) = backend.compute_svd(&a)?;
 ```
 
